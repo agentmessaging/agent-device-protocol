@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Agent home · AI Maestro</title>
+    <link rel="stylesheet" href="/screen.css" />
+    <script defer src="/screen.js"></script>
+  </head>
+  <body data-state="disconnected">
+    <header>
+      <div class="brand"><b aria-hidden="true">≋</b> AI Maestro</div>
+      <span>Agent home</span>
+    </header>
+    <main>
+      <section class="presence" aria-label="Agent activity">
+        <div class="signal" aria-hidden="true">
+          <div class="orbit"></div>
+          <div class="orb">
+            <div class="wave">
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+          </div>
+        </div>
+        <h1 id="name">Agent home</h1>
+        <div class="status" role="status">
+          <i></i><span id="status">Connecting</span>
+        </div>
+        <p id="address"></p>
+      </section>
+    </main>
+    <aside id="pip" aria-label="Camera picture in picture">
+      <div class="pip-head">
+        <h2>Agent view</h2>
+        <button id="expand" aria-expanded="false" aria-controls="preview">
+          Expand
+        </button>
+      </div>
+      <div id="preview">
+        <img
+          id="frame"
+          alt="Most recent camera snapshot captured for the assigned agent"
+          hidden
+        /><span id="empty">Waiting for camera status</span>
+      </div>
+      <footer id="caption">Last camera snapshot</footer>
+    </aside>
+  </body>
+</html>

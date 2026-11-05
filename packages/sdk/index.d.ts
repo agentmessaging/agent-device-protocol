@@ -13,6 +13,7 @@ export type Response = { id: string; to: string; challenge: string } & (
       assignedAgent: string;
       capabilities: Capability[];
       version: 1;
+      events?: string[];
       streams: string[];
     }
   | {
@@ -39,3 +40,13 @@ export function call(
   capability?: Capability,
   fetcher?: typeof fetch,
 ): Promise<Response>;
+
+export type ActivityState = "working" | "waiting" | "idle" | "unknown";
+export function publishActivity(
+  origin: string,
+  self: Identity,
+  device: string,
+  assignedAgent: string,
+  state: ActivityState,
+  fetcher?: typeof fetch,
+): Promise<{ type: "activity.ack"; id: string; to: string; challenge: string }>;

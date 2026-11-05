@@ -92,7 +92,38 @@ async function limitedJson(response, limit) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
-export async function call(origin, self, device, capability, fetcher = fetch) {
+export function call(origin, self, device, capability, fetcher = fetch) {
+  const command =
+    capability === undefined
+      ? { type: "discover" }
+      : { type: "invoke", capability };
+  return exchange(
+    origin,
+    self,
+    device,
+    command,
+    capability === undefined ? "register" : "result",
+    fetcher,
+  );
+}
+export function publishActivity(
+  origin,
+  self,
+  device,
+  assignedAgent,
+  state,
+  fetcher = fetch,
+) {
+  return exchange(
+    origin,
+    self,
+    device,
+    { type: "activity", assignedAgent: agentAddress(assignedAgent), state },
+    "activity.ack",
+    fetcher,
+  );
+}
+async function exchange(origin, self, device, command, responseType, fetcher) {
   const base = privateOrigin(origin);
   const options = { redirect: "error", signal: AbortSignal.timeout(15000) };
   const hello = await fetcher(base + "/v1/challenge", options);
@@ -100,10 +131,6 @@ export async function call(origin, self, device, capability, fetcher = fetch) {
   const { challenge } = await limitedJson(hello, 1024);
   if (!/^[a-f0-9]{48}$/.test(challenge)) throw new Error("Invalid challenge");
   const id = nonce();
-  const command =
-    capability === undefined
-      ? { type: "discover" }
-      : { type: "invoke", capability };
   const request = { id, challenge, to: device, ...command };
   const res = await fetcher(base + "/v1/request", {
     ...options,
@@ -117,7 +144,7 @@ export async function call(origin, self, device, capability, fetcher = fetch) {
     result.id !== id ||
     result.to !== self.key ||
     result.challenge !== challenge ||
-    result.type !== (capability === undefined ? "register" : "result")
+    result.type !== responseType
   )
     throw new Error("Uncorrelated response");
   return result;

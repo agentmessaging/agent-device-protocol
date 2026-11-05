@@ -41,9 +41,18 @@ export function pair(key, { camera = false, assignedAgent } = {}) {
       throw new Error("Transfer requires the new agent's own public key");
   }
   const temp = join(dir, nonce() + ".tmp");
-  writeFileSync(temp, JSON.stringify({ key, camera, assignedAgent }), {
-    mode: 0o600,
-    flag: "wx",
-  });
+  writeFileSync(
+    temp,
+    JSON.stringify({
+      key,
+      camera,
+      assignedAgent,
+      revision: assignedAgent ? nonce() : undefined,
+    }),
+    {
+      mode: 0o600,
+      flag: "wx",
+    },
+  );
   renameSync(temp, join(dir, "peer.json"));
 }

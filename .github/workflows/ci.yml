@@ -16,3 +16,11 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm test
       - run: bash tests/smoke.sh
+      - run: node tests/browser-smoke.mjs
+        if: matrix.node == 24
+      - uses: actions/upload-artifact@v4
+        if: matrix.node == 24
+        with:
+          name: agent-display-preview
+          path: /tmp/adp-display.png
+          retention-days: 2

@@ -129,3 +129,29 @@ node apps/controller/cli.mjs announce "$DEVICE_URL"
 ```
 
 This performs fresh signed discovery and sends one inventory notification to the assigned agent named in the signed registration. To invoke from an agent, expose the controller's fixed operations to that trusted agent or call the SDK from its local tool. The controller identity belongs to the local OS user. Anyone who can read its private key has the same grants.
+
+## 7. Show the assigned agent and its camera picture on the MacBook
+
+**Update an already paired device.** In the existing checkout on both machines, run `git pull --ff-only && npm ci --ignore-scripts`. Keep the same OS account and ADP_HOME on each machine. Existing keys and assignments continue to work.
+
+On the MacBook, restart the installed user service:
+
+```sh
+systemctl --user restart ai-maestro-device
+```
+
+If you started the bridge in the foreground, stop that process instead and relaunch `node clients/linux/cli.mjs serve "$(tailscale ip -4)"`. The same bridge now serves the read-only display separately on loopback. Open **http://127.0.0.1:23111** in the MacBook browser. For full screen on Omarchy, use `chromium --kiosk http://127.0.0.1:23111`.
+
+On Mini Lola, in the assigned agent's isolated controller environment, set DEVICE_URL to the same MacBook URL used for the health test and start:
+
+```sh
+node apps/controller/cli.mjs watch "$DEVICE_URL"
+```
+
+Keep the publisher running. It reads the assigned AMP address from signed discovery, verifies its full address against Maestro's local directory, and reads that session's activity every three seconds from http://127.0.0.1:23000. For a separate controller environment, set MAESTRO_URL to the trusted numeric Tailscale HTTP origin of the agent's Maestro host. Use the canonical AMP address reported by that host's directory. This version matches the session name to the part before @. The optional argument after DEVICE_URL asserts the expected full address.
+
+Start a task in the agent's normal Maestro session. The orb and caption follow the reported state (working, idle, waiting for you). A missing session shows “Activity unavailable.” If the source, publisher, or network stops reporting, the display shows “Disconnected” after 15 seconds. The display can run without camera permission.
+
+**Test picture in picture.** With camera permission enabled as in section 4, invoke `camera.snapshot` from Mini Lola. The inset on the MacBook shows the same JPEG returned by the bridge and its capture time. Expand the inset for a larger view. It mirrors snapshots from the bridge only. No extra browser camera permission is needed. The last frame expires after one minute, or clears earlier on camera revocation, unassignment or transfer. Polling the screen never starts a camera capture. Continuous video, voice levels and transcript rendering are outside this version.
+
+If the orb stays disconnected, look at the publisher's terminal first. A directory mismatch means the source is on a different Maestro host, or the MacBook assignment uses a different address. Inspect `node clients/linux/cli.mjs assignment` on the MacBook. Registration after upgrading should advertise `events: ["activity"]`. The screen port is local to the MacBook; only the signed bridge port 23110 needs tailnet access.
