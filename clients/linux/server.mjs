@@ -1,10 +1,10 @@
 import http from "node:http";
-import { nonce, open, seal } from "@ai-maestro/device-sdk";
+import { agentAddress, nonce, open, seal } from "@ai-maestro/device-sdk";
 import { cameraReady, snapshot } from "./hardware.mjs";
 
 export function bridge(self, getPeer, hardware = { cameraReady, snapshot }) {
   const challenges = new Map();
-  let capturing = false;
+  let captureOwner;
   const server = http.createServer(
     { requestTimeout: 12000, headersTimeout: 10000, maxHeaderSize: 8192 },
     async (req, res) => {
@@ -35,6 +35,7 @@ export function bridge(self, getPeer, hardware = { cameraReady, snapshot }) {
           chunks.push(chunk);
         }
         const peer = getPeer();
+        const assignedAgent = agentAddress(peer.assignedAgent);
         const msg = open(JSON.parse(Buffer.concat(chunks)), peer.key);
         if (
           msg?.to !== self.key ||
@@ -43,6 +44,12 @@ export function bridge(self, getPeer, hardware = { cameraReady, snapshot }) {
         )
           return reply(403, { error: "invalid_request" });
         challenges.delete(msg.challenge);
+        if (
+          captureOwner &&
+          (captureOwner.key !== peer.key ||
+            captureOwner.assignedAgent !== assignedAgent)
+        )
+          return reply(409, { error: "transfer_draining" });
         const base = { to: peer.key, id: msg.id, challenge: msg.challenge };
         const result = (data) =>
           reply(200, seal({ ...base, ...data }, self.secret));
@@ -53,6 +60,7 @@ export function bridge(self, getPeer, hardware = { cameraReady, snapshot }) {
           return result({
             type: "register",
             version: 1,
+            assignedAgent,
             capabilities,
             streams: [],
           });
@@ -69,19 +77,23 @@ export function bridge(self, getPeer, hardware = { cameraReady, snapshot }) {
             ok: true,
             value: { status: "ok", platform: process.platform },
           });
-        if (capturing)
+        if (captureOwner)
           return result({
             type: "result",
             ok: false,
             error: "hardware_unavailable",
           });
-        capturing = true;
+        captureOwner = { key: peer.key, assignedAgent };
         try {
-          return result({
-            type: "result",
-            ok: true,
-            value: await hardware.snapshot(),
-          });
+          const value = await hardware.snapshot();
+          const current = getPeer();
+          if (
+            current.key !== peer.key ||
+            current.assignedAgent !== assignedAgent ||
+            current.camera !== true
+          )
+            return reply(403, { error: "grant_revoked" });
+          return result({ type: "result", ok: true, value });
         } catch {
           return result({
             type: "result",
@@ -89,7 +101,7 @@ export function bridge(self, getPeer, hardware = { cameraReady, snapshot }) {
             error: "hardware_unavailable",
           });
         } finally {
-          capturing = false;
+          captureOwner = undefined;
         }
       } catch {
         return reply(403, { error: "invalid_request" });

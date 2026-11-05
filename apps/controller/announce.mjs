@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { call } from "@ai-maestro/device-sdk";
+import { agentAddress, call } from "@ai-maestro/device-sdk";
 import { self, peer } from "../../packages/sdk/state.mjs";
 
 // Operator-triggered AMP event. Run in the intended agent's AMP environment.
@@ -14,12 +14,11 @@ export async function announce(
     device = peer,
   } = {},
 ) {
-  if (
-    !/^[A-Za-z0-9][A-Za-z0-9._+-]*@[A-Za-z0-9][A-Za-z0-9.-]*$/.test(recipient)
-  )
-    throw new Error("Expected full AMP recipient address");
   const key = device().key;
   const registration = await read(origin, controller(), key);
+  const owner = agentAddress(registration.assignedAgent);
+  if (recipient !== undefined && recipient !== owner)
+    throw new Error("AMP events are restricted to the assigned agent");
   const event = {
     type: "device.registered",
     version: 1,
@@ -30,7 +29,7 @@ export async function announce(
   await send(
     "amp-send",
     [
-      recipient,
+      owner,
       "Device capabilities",
       JSON.stringify(event),
       "--type",

@@ -10,6 +10,7 @@ export type Capability = "device.health" | "camera.snapshot";
 export type Response = { id: string; to: string; challenge: string } & (
   | {
       type: "register";
+      assignedAgent: string;
       capabilities: Capability[];
       version: 1;
       streams: string[];
@@ -23,6 +24,7 @@ export type Response = { id: string; to: string; challenge: string } & (
     }
   | { type: "result"; ok: false; error: "denied" | "hardware_unavailable" }
 );
+export function agentAddress(value: string): string;
 export function nonce(): string;
 export function identity(): Identity;
 export function publicKey(key: string): import("node:crypto").KeyObject;

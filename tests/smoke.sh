@@ -11,7 +11,8 @@ device() { ADP_HOME="$tmp/device" node clients/linux/cli.mjs "$@"; }
 agent() { ADP_HOME="$tmp/controller" node apps/controller/cli.mjs "$@"; }
 device_key=$(device init)
 agent_key=$(agent init)
-device pair "$agent_key"
+device assign lola@mini.aimaestro.local "$agent_key"
+device assignment
 agent pair "$device_key"
 ADP_HOME="$tmp/device" node clients/linux/cli.mjs serve >"$tmp/server.log" 2>&1 &
 pid=$!

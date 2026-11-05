@@ -5,8 +5,7 @@ import { call } from "@ai-maestro/device-sdk";
 const [action, arg, capability, out, ...extra] = process.argv.slice(2);
 if (action === "init" && !arg) init();
 else if (action === "pair" && !capability) pair(arg);
-else if (action === "announce" && capability && !out)
-  await announce(arg, capability);
+else if (action === "announce" && !out) await announce(arg, capability);
 else if (
   (action === "discover" && !capability) ||
   (action === "invoke" && capability && !extra.length)
@@ -24,5 +23,5 @@ else if (
   if (result.ok === false) process.exitCode = 1;
 } else
   throw new Error(
-    "Usage: init | pair DEVICE_KEY | discover URL | announce URL AMP_ADDRESS | invoke URL CAPABILITY [NEW_FILE.jpg]",
+    "Usage: init | pair DEVICE_KEY | discover URL | announce URL [ASSIGNED_AMP_ADDRESS] | invoke URL CAPABILITY [NEW_FILE.jpg]",
   );

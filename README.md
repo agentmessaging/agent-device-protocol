@@ -1,6 +1,6 @@
 # AI Maestro Device Protocol
 
-A Maestro agent on one machine can discover a paired Linux computer and ask it for a health report or a camera snapshot. The agent runs on its usual host. The Linux machine runs a small device bridge as the desktop user. This is an experimental v1 protocol.
+One locally assigned Maestro agent, identified by its AMP address and exclusive signing key, can discover a paired Linux computer and ask it for a health report or a camera snapshot. The agent runs on its usual host. The Linux machine runs a small device bridge as the desktop user. This is an experimental v1 protocol.
 
 | Component | Implementation |
 | --- | --- |

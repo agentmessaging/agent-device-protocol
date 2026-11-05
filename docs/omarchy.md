@@ -37,7 +37,9 @@ node clients/linux/cli.mjs init
 tailscale ip -4
 ```
 
-On **Mini Lola**:
+On **Mini Lola**, launch the chosen agent and its controller under a dedicated OS account or an isolated container. Only that agent may read its key or call its signer. Maestro agents running unrestricted as the same OS user can impersonate each other. Separate directories alone do not isolate them. For an upgrade from a shared controller, initialize a fresh key inside the isolated account and stop the old bridge before replacing it.
+
+From the chosen agent's isolated environment:
 
 ```sh
 node apps/controller/cli.mjs init
@@ -45,10 +47,11 @@ node apps/controller/cli.mjs init
 
 Each init prints the same public key on repeat runs. Compare the keys using the physical consoles or another trusted channel. Replace the uppercase placeholders below. Use the MacBook's tailnet IP, not Mini Lola's.
 
-On **Omarchy**:
+On **Omarchy**, substitute the agent's full Maestro AMP address and the public key printed in its isolated account. This local assignment replaces any previous one. Repeat it with a fresh key when changing agents. Legacy key-only device pairings require a new assignment.
 
 ```sh
-node clients/linux/cli.mjs pair CONTROLLER_PUBLIC_KEY
+node clients/linux/cli.mjs assign AGENT_AMP_ADDRESS AGENT_PUBLIC_KEY
+node clients/linux/cli.mjs assignment
 node clients/linux/cli.mjs serve "$(tailscale ip -4)"
 ```
 
@@ -62,6 +65,17 @@ node apps/controller/cli.mjs invoke "$DEVICE_URL" device.health
 ```
 
 Expect a signed registration listing `device.health`, followed by a result containing `"status": "ok"` and `"platform": "linux"`. If discovery fails, check `tailscale ping MACBOOK_TAILSCALE_IPV4`, the tailnet policy, and the listening address printed by the bridge.
+
+### Transfer the MacBook to another agent
+
+Initialize a fresh controller identity inside the next agent's isolated environment and verify its public key. On the MacBook, run:
+
+```sh
+node clients/linux/cli.mjs assign NEW_AGENT_AMP_ADDRESS NEW_AGENT_PUBLIC_KEY
+node clients/linux/cli.mjs assignment
+```
+
+In the new controller environment run `node apps/controller/cli.mjs pair DEVICE_PUBLIC_KEY`, then discover and check health as above. The old key loses access immediately. Camera permission starts off. If a snapshot was in progress, the new agent may briefly receive HTTP 409; retry when capture ends. These ownership rules apply to every device and its attached capabilities.
 
 ## 4. Test the built-in camera locally, then grant permission
 
@@ -78,7 +92,7 @@ If the last command succeeds, inspect the photo and remove that temporary file. 
 Grant standing camera access to this one controller:
 
 ```sh
-node clients/linux/cli.mjs pair CONTROLLER_PUBLIC_KEY --camera
+node clients/linux/cli.mjs assign AGENT_AMP_ADDRESS AGENT_PUBLIC_KEY --camera
 ```
 
 On **Mini Lola**:
@@ -88,7 +102,7 @@ node apps/controller/cli.mjs discover "$DEVICE_URL"
 node apps/controller/cli.mjs invoke "$DEVICE_URL" camera.snapshot macbook-test.jpg
 ```
 
-Expect `camera.snapshot` in discovery and a new JPEG file. Use a fresh filename for each capture. To withdraw camera permission, repeat the MacBook pair command without `--camera`. To revoke all future commands immediately, delete `${ADP_HOME:-$HOME/.config/ai-maestro-device}/peer.json` on the MacBook. An operation already authorized may finish. Stop the bridge with Ctrl-C.
+Expect `camera.snapshot` in discovery and a new JPEG file. Use a fresh filename for each capture. To withdraw camera permission, repeat the MacBook assign command without `--camera`. To revoke all future commands immediately, delete `${ADP_HOME:-$HOME/.config/ai-maestro-device}/peer.json` on the MacBook. An operation already authorized may finish. Stop the bridge with Ctrl-C.
 
 ## 5. Optional user service
 
@@ -108,10 +122,10 @@ The unit assumes Arch's /usr/bin/node and runs in the user's login session. Keep
 
 ## 6. Optional AMP notification
 
-On Mini Lola, in the configured sending agent's AMP environment, with Maestro's `amp-send` installed and authenticated, use the recipient's actual full AMP address:
+On Mini Lola, in the configured sending agent's AMP environment, with Maestro's `amp-send` installed and authenticated, run:
 
 ```sh
-node apps/controller/cli.mjs announce "$DEVICE_URL" 'lola@YOUR_HOST.aimaestro.local'
+node apps/controller/cli.mjs announce "$DEVICE_URL"
 ```
 
-This performs fresh signed discovery and sends one inventory notification. To invoke from an agent, expose the controller's fixed operations to that trusted agent or call the SDK from its local tool. The controller identity belongs to the local OS user. Anyone who can read its private key has the same grants.
+This performs fresh signed discovery and sends one inventory notification to the assigned agent named in the signed registration. To invoke from an agent, expose the controller's fixed operations to that trusted agent or call the SDK from its local tool. The controller identity belongs to the local OS user. Anyone who can read its private key has the same grants.

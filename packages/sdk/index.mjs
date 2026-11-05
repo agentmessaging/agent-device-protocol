@@ -7,6 +7,17 @@ import {
 } from "node:crypto";
 import { isIPv4 } from "node:net";
 
+export function agentAddress(value) {
+  if (
+    typeof value !== "string" ||
+    value.length > 254 ||
+    !/^[A-Za-z0-9][A-Za-z0-9._+-]*@[A-Za-z0-9][A-Za-z0-9.-]*$/.test(value) ||
+    /\s/.test(value)
+  )
+    throw new Error("Expected one full AMP agent address");
+  return value;
+}
+
 export const nonce = () => randomBytes(24).toString("hex");
 export function localAddress(host) {
   if (!isIPv4(host)) return false;
