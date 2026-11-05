@@ -1,0 +1,16 @@
+{
+  "name": "ai-maestro-device-protocol",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "clients/linux",
+    "apps/controller"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}

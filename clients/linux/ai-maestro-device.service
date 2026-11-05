@@ -1,0 +1,13 @@
+[Unit]
+Description=AI Maestro device bridge
+
+[Service]
+EnvironmentFile=%h/.config/ai-maestro-device/service.env
+ExecStart=/usr/bin/node ${ADP_REPO}/clients/linux/cli.mjs serve ${ADP_BIND}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target

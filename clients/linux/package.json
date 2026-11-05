@@ -1,0 +1,9 @@
+{
+  "name": "@ai-maestro/device-linux",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ai-maestro/device-sdk": "0.1.0"
+  }
+}
