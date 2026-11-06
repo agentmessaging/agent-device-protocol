@@ -56,7 +56,7 @@ The API surface is:
 - `poll()` / `start(options?)` / `stop()`: integrated host-wide liveness, with no per-agent monitor required.
 - `snapshot()`: export public controller state for implementation-owned persistence. Private keys are supplied separately and MUST NOT appear in status events.
 
-The implementation and TypeScript declarations are exported from `packages/sdk/controller.mjs` and `controller.d.mts` in PR #9. See [server integration](../docs/controller-sdk.md) for an embedding example. The conformance adapter and executable scenarios live in `tests/conformance/`; third-party controllers use the same scenario assertions through an adapter, rather than importing the reference CLI's state or UI.
+The implementation and TypeScript declarations are exported from `packages/sdk/controller.mjs` and `controller.d.mts`. See [server integration](../docs/controller-sdk.md) for an embedding example. The conformance adapter and executable scenarios live in `tests/conformance/`; third-party controllers use the same scenario assertions through an adapter, rather than importing the reference CLI's state or UI.
 
 ## Reference implementation choices
 

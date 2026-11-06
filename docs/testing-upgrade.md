@@ -1,10 +1,11 @@
 # Test the current protocol changes
 
-PR #9 contains the implementation. It is not yet deployed to your MacBook or merged into main. In each existing device-protocol checkout, with the same Node 22+ runtime and ADP_HOME used for pairing:
+The completed protocol implementation is on main after PRs #9, #17 and #18. Updating the repository does not deploy it to your MacBook automatically. In each existing device-protocol checkout, with the same Node 22+ runtime and ADP_HOME used for pairing:
 
 ```sh
 git fetch origin
-git switch feat/live-media-agent-tools
+git switch main
+git pull --ff-only
 npm ci --ignore-scripts
 npm run typecheck
 npm test
