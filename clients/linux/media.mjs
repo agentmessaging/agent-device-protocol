@@ -1,13 +1,8 @@
 import { spawn } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 
-export const formats = Object.freeze({
-  video: { mime: "image/jpeg", maxBytes: 512 * 1024 },
-  microphone: {
-    mime: "audio/pcm;format=s16le;rate=16000;channels=1",
-    maxBytes: 3200,
-  },
-});
+import { mediaFormats as formats } from "../../packages/sdk/media.mjs";
+export { formats };
 export function mediaAvailable(kind) {
   try {
     accessSync("/usr/bin/ffmpeg", constants.X_OK);

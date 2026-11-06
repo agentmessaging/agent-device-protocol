@@ -1,5 +1,13 @@
 import { nonce, privateOrigin, open, seal } from "./index.mjs";
 
+export const mediaFormats = Object.freeze({
+  video: { mime: "image/jpeg", maxBytes: 512 * 1024 },
+  microphone: {
+    mime: "audio/pcm;format=s16le;rate=16000;channels=1",
+    maxBytes: 3200,
+  },
+});
+
 export async function* streamMedia(
   origin,
   self,
@@ -29,7 +37,15 @@ export async function* streamMedia(
     method: "POST",
     body: JSON.stringify(
       seal(
-        { id, challenge, to: device, type: "media", kind, seconds },
+        {
+          id,
+          challenge,
+          to: device,
+          type: "media",
+          kind,
+          seconds,
+          format: mediaFormats[kind].mime,
+        },
         self.secret,
       ),
     ),

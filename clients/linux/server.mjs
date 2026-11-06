@@ -1,4 +1,5 @@
 import http from "node:http";
+import { mediaFormats } from "../../packages/sdk/media.mjs";
 import { agentAddress, nonce, open, seal } from "@ai-maestro/device-sdk";
 import { cameraReady, snapshot } from "./hardware.mjs";
 
@@ -100,6 +101,12 @@ export function bridge(
             assignedAgent,
             capabilities,
             streams: media?.advertised(peer) ?? [],
+            mediaFormats: Object.fromEntries(
+              (media?.advertised(peer) ?? []).map((kind) => [
+                kind,
+                mediaFormats[kind],
+              ]),
+            ),
             permissions: { camera: peer.camera === true, ...peer.media },
             ...(proposals ? { localApproval: true } : {}),
             ...(display ? { events: ["activity"] } : {}),
@@ -158,11 +165,19 @@ export function bridge(
             !Number.isInteger(msg.seconds) ||
             msg.seconds < 1 ||
             msg.seconds > 60 ||
+            (msg.format !== undefined &&
+              msg.format !== mediaFormats[msg.kind]?.mime) ||
             Object.keys(msg).some(
               (k) =>
-                !["type", "id", "challenge", "to", "kind", "seconds"].includes(
-                  k,
-                ),
+                ![
+                  "type",
+                  "id",
+                  "challenge",
+                  "to",
+                  "kind",
+                  "seconds",
+                  "format",
+                ].includes(k),
             )
           )
             return reply(400, { error: "invalid_media" });

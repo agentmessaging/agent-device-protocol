@@ -12,3 +12,7 @@ export function streamMedia(
   bytes: Buffer;
 }>;
 export function wav(pcm: Buffer): Buffer;
+
+export declare const mediaFormats: Readonly<
+  Record<"video" | "microphone", { mime: string; maxBytes: number }>
+>;

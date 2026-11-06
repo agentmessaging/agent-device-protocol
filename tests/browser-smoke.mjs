@@ -8,10 +8,39 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
 
-const peer = { assignedAgent: "Lola@mini.local", key: "test", camera: true };
+const peer = {
+  assignedAgent: "Lola@mini.local",
+  key: "test",
+  camera: true,
+  media: { video: true },
+};
 const display = new DisplayState(() => peer);
 display.update(peer, "waiting", 1);
-const server = displayServer(display);
+const picture = await promisify(execFile)(
+  "/usr/bin/ffmpeg",
+  [
+    "-loglevel",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc2=size=640x360",
+    "-frames:v",
+    "1",
+    "-f",
+    "image2pipe",
+    "-c:v",
+    "mjpeg",
+    "pipe:1",
+  ],
+  { encoding: "buffer" },
+);
+display.mediaStarted(peer, "video");
+display.capture(peer, { data: picture.stdout.toString("base64") });
+const server = displayServer(display, {
+  setConsent: () => {},
+  stopAll: () => {},
+});
 server.listen(0, "127.0.0.1");
 await once(server, "listening");
 const profile = await mkdtemp(join(tmpdir(), "adp-browser-"));
@@ -35,7 +64,13 @@ try {
   );
   assert.match(stdout, /<h1 id="name">Lola<\/h1>/);
   assert.match(stdout, /<span id="status">Waiting for you<\/span>/);
-  assert.match(stdout, /<span id="empty">No recent capture<\/span>/);
+  assert.match(
+    stdout,
+    /<span id="media-status" role="status">Camera live<\/span>/,
+  );
+  assert.match(stdout, /<div id="consent">/);
+  assert.match(stdout, /<img[^>]*id="frame"[^>]*src="\/frame\/[^>]*>/);
+  assert.doesNotMatch(stdout, /<img[^>]*id="frame"[^>]*hidden/);
 } finally {
   server.close();
   server.closeAllConnections();
