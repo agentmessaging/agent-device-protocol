@@ -2,7 +2,7 @@
 # Runs only in ephemeral Linux CI, as root.
 set -euo pipefail
 test "$(id -u)" = 0
-repo=/opt/adp-broker-ci
+repo=/adp-broker-ci
 state=/var/lib/adp-broker-ci
 socket=/run/adp-broker-ci.sock
 mkdir -p "$repo" "$state"
