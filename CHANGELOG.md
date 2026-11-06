@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A jump to the device already active changes nothing. Before, a person typing at a device cancelled what the agent was doing there.
 - A controller says why it refused a device connection, and a device stops on a final refusal instead of retrying forever (#22).
 - `serve` can also connect out with `ADP_CONTROLLER`, so a device keeps live media and gains device input.
 - `speaker.play`: the device plays WAV audio the controller made, with its own grant, so an agent keeps one voice on every device.
