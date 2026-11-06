@@ -18,7 +18,7 @@ For each agent the controller MUST hold one active device key, or no active devi
 
 A jump MUST atomically replace the active choice and invalidate the previous activation generation. It MUST NOT wait for the previous device, require a lease, or involve agreement between devices. The last accepted jump wins. In-flight old operations MUST be cancelled; their results and subsequent frames MUST NOT be delivered after the jump, including when an old device reconnects. A new connection MUST NOT replay an invocation. A device may briefly finish cancelling hardware locally; that does not authorize releasing its data.
 
-Signed `device.used` and signed user `input` from an owned device count as a jump to that device. The controller MUST verify device identity, freshness and ownership before changing the active selection. Neither event authenticates a named human. Activity updates SHOULD include an `active` boolean for display; this is informational and MUST NOT be treated as a device-enforced security boundary.
+A jump to the device that is already active changes nothing: it keeps the generation, running operations continue, and no event is emitted. Signed `device.used` and signed user `input` from an owned device count as a jump to that device. The controller MUST verify device identity, freshness and ownership before changing the active selection. Neither event authenticates a named human. Activity updates SHOULD include an `active` boolean for display; this is informational and MUST NOT be treated as a device-enforced security boundary.
 
 ## Operations and local authority
 
