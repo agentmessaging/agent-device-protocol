@@ -1,5 +1,11 @@
 {
-  "name": "ai-maestro-device-protocol",
+  "name": "agent-device-protocol",
+  "description": "Agent Device Protocol (ADP): an open protocol for AI agents to own and use real devices",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/23blocks-OS/agent-device-protocol.git"
+  },
   "private": true,
   "type": "module",
   "workspaces": [

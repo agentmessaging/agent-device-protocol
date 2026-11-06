@@ -23,5 +23,6 @@
   },
   "dependencies": {
     "ws": "8.22.1"
-  }
+  },
+  "license": "MIT"
 }
