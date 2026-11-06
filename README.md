@@ -12,6 +12,10 @@ One locally assigned Maestro agent, identified by its AMP address and exclusive 
 | Future clients | [macOS](clients/macos), [mobile](clients/mobile), [embedded](clients/embedded) |
 | Audio | Microphone and speaker adapter profiles reserved. Streaming is deferred. |
 
+## Implementation status
+
+This is a signed-command and display prototype. The agent-home workflow still needs installed agent tools, automatic lifecycle notifications, shared-host key isolation and live media. Review the [Muse SDK gap audit and delivery criteria](docs/muse-gap-audit.md) before evaluating feature completeness. Other platform directories contain plans.
+
 ## Run it
 
 Follow the [two-machine Omarchy runbook](docs/omarchy.md) to pair Mini Lola with the 2010 MacBook, run health, and opt into camera access. [The integration notes](docs/integration.md) map this implementation to Muse and Maestro and explain its trust boundary.

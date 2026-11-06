@@ -7,14 +7,34 @@ The MacBook serves its local hardware. Mini Lola runs the controller alongside M
 On the existing x86-64 Omarchy / Arch installation:
 
 ```sh
-sudo pacman -Syu --needed nodejs npm git tailscale ffmpeg v4l-utils
+sudo pacman -Syu --needed git github-cli tailscale ffmpeg v4l-utils
 sudo systemctl enable --now tailscaled
 tailscale status
 ```
 
 If the MacBook is signed out, run `sudo tailscale up` and follow its login prompt. On both machines, confirm Tailscale lists the intended peer. Restrict the tailnet policy to allow Mini Lola to reach only the MacBook on TCP port 23110 for this service. Review any broader rules already granting access. Do not forward the port on the router. The app enforces pinned keys separately.
 
-## 2. Get the code on both machines
+## 2. Select Node and get the code on both machines
+
+First check `node --version` on each host. The bridge and controller require Node 22 or newer. If your current runtime is suitable, keep it. For Omarchy with mise, or a controller host with mise already installed, select a user-local Node runtime in this terminal:
+
+```sh
+mise install node@22
+export PATH="$(mise where node@22)/bin:$PATH"
+node --version
+npm --version
+```
+
+This PATH setting applies to this terminal and its child processes. Reapply it in a new terminal. The service configuration below records the actual executable path. On a host with nvm already installed, `nvm install 22 && nvm use 22` provides the same terminal-scoped selection. Avoid changing the system Node used by other agents. If neither manager is available, use the [official Node download instructions](https://nodejs.org/en/download). [mise runtime selection](https://mise.jdx.dev/cli/where.html)
+
+Authenticate GitHub on **both hosts** before cloning. With GitHub CLI installed, including over SSH:
+
+```sh
+BROWSER=true gh auth login --hostname github.com --git-protocol https --web
+gh auth setup-git
+```
+
+Follow the terminal's device-code prompt using a browser on your other computer. Use the organization account that can read this private repository. On Ubuntu, install the CLI using its [official Linux instructions](https://github.com/cli/cli/blob/trunk/docs/install_linux.md). [GitHub authentication options](https://cli.github.com/manual/gh_auth_login)
 
 On **each** machine, from the location where you keep repositories:
 
@@ -26,7 +46,7 @@ npm ci --ignore-scripts
 npm test
 ```
 
-Mini Lola needs Node.js 22 or newer and npm on its PATH. If Git asks for credentials, authenticate with a GitHub account that can access the organization repo. The workspace has zero third-party runtime dependencies.
+The workspace has zero third-party runtime dependencies.
 
 ## 3. Exchange two public keys
 
@@ -43,9 +63,10 @@ From the chosen agent's isolated environment:
 
 ```sh
 node apps/controller/cli.mjs init
+node apps/controller/cli.mjs pair DEVICE_PUBLIC_KEY
 ```
 
-Each init prints the same public key on repeat runs. Compare the keys using the physical consoles or another trusted channel. Replace the uppercase placeholders below. Use the MacBook's tailnet IP, not Mini Lola's.
+Each init prints a role label, state directory and fingerprint to stderr, and the same bare public key to stdout on repeat runs. Command substitution continues to capture only the key. Pairing and assignment print a confirmation with the stored key and policy path. Compare the keys using the physical consoles or another trusted channel. Replace the uppercase placeholders below. Use the MacBook's tailnet IP, not Mini Lola's.
 
 On **Omarchy**, substitute the agent's full Maestro AMP address and the public key printed in its isolated account. This local assignment replaces any previous one. Repeat it with a fresh key when changing agents. Legacy key-only device pairings require a new assignment.
 
@@ -58,7 +79,6 @@ node clients/linux/cli.mjs serve "$(tailscale ip -4)"
 Keep this terminal open. On **Mini Lola**:
 
 ```sh
-node apps/controller/cli.mjs pair DEVICE_PUBLIC_KEY
 export DEVICE_URL='http://MACBOOK_TAILSCALE_IPV4:23110'
 node apps/controller/cli.mjs discover "$DEVICE_URL"
 node apps/controller/cli.mjs invoke "$DEVICE_URL" device.health
@@ -112,13 +132,22 @@ After the foreground health check passes, stop the foreground bridge. From the s
 mkdir -p ~/.config/systemd/user
 cp clients/linux/ai-maestro-device.service ~/.config/systemd/user/
 mkdir -p ~/.config/ai-maestro-device
-printf 'ADP_REPO="%s"\nADP_BIND=%s\n' "$PWD" "$(tailscale ip -4)" > ~/.config/ai-maestro-device/service.env
+printf 'ADP_NODE="%s"\nADP_REPO="%s"\nADP_BIND=%s\n' "$(node -p 'process.execPath')" "$PWD" "$(tailscale ip -4)" > ~/.config/ai-maestro-device/service.env
 systemctl --user daemon-reload
 systemctl --user enable --now ai-maestro-device
 journalctl --user -u ai-maestro-device -n 30
 ```
 
-The unit assumes Arch's /usr/bin/node and runs in the user's login session. Keep the checkout at the configured path. Use `systemctl --user disable --now ai-maestro-device` to stop and disable it. Update service.env if the IP or checkout moves.
+The unit uses ADP_NODE from service.env, including a mise or nvm runtime. Existing service.env files without that field retain /usr/bin/node as the default. Keep the selected runtime installed and regenerate the file if its path changes. When upgrading an existing service, copy the updated unit and run `systemctl --user daemon-reload` before restarting.
+
+For a headless device that must keep serving after logout or boot before login, explicitly enable lingering for the bridge user:
+
+```sh
+sudo loginctl enable-linger "$USER"
+loginctl show-user "$USER" -p Linger
+```
+
+Verify `Linger=yes`. Desktop-session camera ACLs may still require a local login. Check hardware access separately after a headless reboot. Keep the checkout at the configured path. Use `systemctl --user disable --now ai-maestro-device` to stop and disable it. Update service.env if the IP or checkout moves.
 
 ## 6. Optional AMP notification
 
@@ -155,3 +184,22 @@ Start a task in the agent's normal Maestro session. The orb and caption follow t
 **Test picture in picture.** With camera permission enabled as in section 4, invoke `camera.snapshot` from Mini Lola. The inset on the MacBook shows the same JPEG returned by the bridge and its capture time. Expand the inset for a larger view. It mirrors snapshots from the bridge only. No extra browser camera permission is needed. The last frame expires after one minute, or clears earlier on camera revocation, unassignment or transfer. Polling the screen never starts a camera capture. Continuous video, voice levels and transcript rendering are outside this version.
 
 If the orb stays disconnected, look at the publisher's terminal first. A directory mismatch means the source is on a different Maestro host, or the MacBook assignment uses a different address. Inspect `node clients/linux/cli.mjs assignment` on the MacBook. Registration after upgrading should advertise `events: ["activity"]`. The screen port is local to the MacBook; only the signed bridge port 23110 needs tailnet access.
+
+
+## Tailnet policy example
+
+Merge a specific grant into the existing policy in the Tailscale admin console. Replace the example IPs with the controller's and MacBook's actual Tailscale IPv4 addresses. Retain the access your other services need and narrow overlapping broad grants so they do not already allow every host to reach this device.
+
+```json
+{
+  "grants": [
+    {
+      "src": ["100.76.17.128/32"],
+      "dst": ["100.100.100.100/32"],
+      "ip": ["tcp:23110"]
+    }
+  ]
+}
+```
+
+The first example IP is Mini Lola's controller address from this setup. The destination is a placeholder. Port 23111 is a loopback-only screen on the MacBook. A successful signed health call verifies service access; Tailscale ping by itself does not verify this port rule. [Tailscale grant syntax](https://tailscale.com/docs/reference/syntax/grants)

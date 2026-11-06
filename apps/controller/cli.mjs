@@ -4,7 +4,7 @@ import { watch } from "./watch.mjs";
 import { announce } from "./announce.mjs";
 import { call } from "@ai-maestro/device-sdk";
 const [action, arg, capability, out, ...extra] = process.argv.slice(2);
-if (action === "init" && !arg) init();
+if (action === "init" && !arg) init("agent");
 else if (action === "pair" && !capability) pair(arg);
 else if (action === "watch" && arg && !out) await watch(arg, capability);
 else if (action === "announce" && !out) await announce(arg, capability);

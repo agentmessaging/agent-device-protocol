@@ -2,8 +2,9 @@
 Description=AI Maestro device bridge
 
 [Service]
+Environment=ADP_NODE=/usr/bin/node
 EnvironmentFile=%h/.config/ai-maestro-device/service.env
-ExecStart=/usr/bin/node ${ADP_REPO}/clients/linux/cli.mjs serve ${ADP_BIND}
+ExecStart=/usr/bin/env ${ADP_NODE} ${ADP_REPO}/clients/linux/cli.mjs serve ${ADP_BIND}
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

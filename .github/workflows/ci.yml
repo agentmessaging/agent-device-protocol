@@ -14,6 +14,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm ci --ignore-scripts
+      - run: systemd-analyze verify clients/linux/ai-maestro-device.service
       - run: npm test
       - run: bash tests/smoke.sh
       - run: node tests/browser-smoke.mjs
