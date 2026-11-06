@@ -1,6 +1,6 @@
 # Controller role — v1
 
-Status: first specification version for issue #15. This document is normative for controllers implementing `ai-maestro-device/1`; the reference CLI is an implementation, not the definition. AI Maestro may implement this role directly in one server for every agent on a host. The keywords MUST, MUST NOT, SHOULD and MAY describe requirements, recommendations and choices respectively.
+Status: controller contract for issues #15 and #16. This document is normative for controllers implementing `ai-maestro-device/1`; the reference CLI is an implementation, not the definition. AI Maestro may implement this role directly in one server for every agent on a host. The keywords MUST, MUST NOT, SHOULD and MAY describe requirements, recommendations and choices respectively.
 
 ## Responsibility and authority
 
@@ -56,7 +56,7 @@ The API surface is:
 - `poll()` / `start(options?)` / `stop()`: integrated host-wide liveness, with no per-agent monitor required.
 - `snapshot()`: export public controller state for implementation-owned persistence. Private keys are supplied separately and MUST NOT appear in status events.
 
-The implementation is being completed against this contract in PR #9. The conformance adapter and executable scenarios live in `tests/conformance/`; third-party controllers use the same scenario assertions through an adapter, rather than importing the reference CLI's state or UI.
+The implementation and TypeScript declarations are in the dependent `feat/controller-runtime` branch. See [the server integration guide](https://github.com/23blocks-OS/ai-maestro-device-protocol/blob/feat/controller-runtime/docs/controller-sdk.md) for an embedding example. The conformance adapter and executable scenarios live in `tests/conformance/`; third-party controllers use the same scenario assertions through an adapter, rather than importing the reference CLI's state or UI.
 
 ## Reference implementation choices
 
