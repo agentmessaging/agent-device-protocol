@@ -14,6 +14,20 @@ Handshake proofs cannot be replayed on another connection. A connection is not c
 
 Controllers ping every ten seconds and mark a silent connection disconnected within forty seconds: a thirty-second pong threshold checked every ten seconds. Devices terminate after thirty-five seconds without a controller message or ping. A closed connection becomes disconnected immediately. Deployments may choose tighter bounds. At most one authenticated connection is retained per device. The reference listener permits 64 total sockets and eight outstanding calls per device.
 
+## Refusals
+
+A controller says why it refused, so a device never has to guess. Before the upgrade it answers with an HTTP status and an `X-ADP-Refusal` header; after it, it closes with code 4003 and the reason as the close reason.
+
+| Reason | Kind | Meaning |
+|---|---|---|
+| `unknown_device` | final | The controller has no such device |
+| `not_owner` | final | The device names another agent |
+| `revoked` | final | The controller removed the device |
+| `unsupported_version` | final | The device speaks a version the controller does not |
+| `busy` | temporary | Too many connections |
+
+Any other end of a connection, such as a network drop or a controller restart, is temporary, and the device retries with capped backoff. After a final refusal a device tries twice more, because it can connect just before its assignment is complete, then stops and tells its owner why. It stays stopped until a new assignment or a restart by its owner.
+
 ## Signed request transport
 
 An outer `{type:"rpc",id,method,body?}` carries a `challenge` or `request` operation. These outer IDs are fresh 24-byte random hex values and correlate transport responses only. A challenge response contains the same one-use device challenge as HTTP. A request body is the unchanged signed v1 packet; its response is the unchanged signed v1 result. The outer reply is `{type:"rpc.result",id,status,body}`. Authority comes from the inner signature and device challenge, not the outer envelope.
