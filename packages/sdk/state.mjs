@@ -1,10 +1,16 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  unlinkSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { identity, nonce, publicKey } from "./index.mjs";
 
-const dir =
+export const dir =
   process.env.ADP_HOME || join(homedir(), ".config", "ai-maestro-device");
 export function self() {
   return JSON.parse(readFileSync(join(dir, "identity.json"), "utf8"));
@@ -70,4 +76,53 @@ function fingerprint(key) {
     .update(Buffer.from(key, "base64url"))
     .digest("hex")
     .slice(0, 16);
+}
+
+export function setMediaConsent(media) {
+  if (
+    !media ||
+    Object.keys(media).some(
+      (k) => !["video", "microphone", "speaker"].includes(k),
+    ) ||
+    Object.values(media).some((v) => typeof v !== "boolean")
+  )
+    throw new Error("Invalid consent");
+  const current = peer();
+  const temp = join(dir, nonce() + ".tmp");
+  writeFileSync(
+    temp,
+    JSON.stringify({
+      ...current,
+      media: { ...current.media, ...media },
+      revision: nonce(),
+    }),
+    { mode: 0o600, flag: "wx" },
+  );
+  renameSync(temp, join(dir, "peer.json"));
+}
+
+export function readLocal(name, fallback = null) {
+  try {
+    return JSON.parse(readFileSync(join(dir, name), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return fallback;
+    throw error;
+  }
+}
+export function writeLocal(name, value) {
+  const temp = join(dir, nonce() + ".tmp");
+  writeFileSync(temp, JSON.stringify(value), { mode: 0o600, flag: "wx" });
+  renameSync(temp, join(dir, name));
+}
+export function applyLocalChange(change) {
+  const current = peer();
+  if (change.action === "transfer")
+    pair(change.key, { assignedAgent: change.agent });
+  else if (change.action === "revoke") unlinkSync(join(dir, "peer.json"));
+  else if (change.action === "camera")
+    writeLocal("peer.json", {
+      ...current,
+      camera: change.enabled,
+      revision: nonce(),
+    });
 }

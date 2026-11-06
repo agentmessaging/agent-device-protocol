@@ -13,6 +13,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+      - run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       - run: npm ci --ignore-scripts
       - run: systemd-analyze verify clients/linux/ai-maestro-device.service
       - run: npm test
@@ -25,3 +26,6 @@ jobs:
           name: agent-display-preview
           path: /tmp/adp-display.png
           retention-days: 2
+      - name: Verify protected Linux signer
+        if: matrix.node == 24
+        run: sudo env PATH="$PATH" bash tests/broker-linux.sh

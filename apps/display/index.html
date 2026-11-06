@@ -12,6 +12,17 @@
       <div class="brand"><b aria-hidden="true">≋</b> AI Maestro</div>
       <span>Agent home</span>
     </header>
+    <section
+      id="proposal"
+      hidden
+      role="region"
+      aria-label="Device change awaiting approval"
+    >
+      <p id="proposal-text"></p>
+      <button id="approve-change">Approve on this device</button
+      ><button id="reject-change">Reject</button>
+      <p id="proposal-error"></p>
+    </section>
     <main>
       <section class="presence" aria-label="Agent activity">
         <div class="signal" aria-hidden="true">
@@ -44,6 +55,20 @@
         /><span id="empty">Waiting for camera status</span>
       </div>
       <footer id="caption">Last camera snapshot</footer>
+      <div id="consent" hidden>
+        <label
+          ><input type="checkbox" data-media="video" /> Allow live camera</label
+        >
+        <label
+          ><input type="checkbox" data-media="microphone" /> Allow
+          microphone</label
+        >
+        <label
+          ><input type="checkbox" data-media="speaker" /> Allow speaker</label
+        >
+        <button id="stop-media">Stop &amp; revoke media</button>
+        <span id="media-status" role="status"></span>
+      </div>
     </aside>
   </body>
 </html>

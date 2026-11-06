@@ -2,7 +2,11 @@
 
 Reviewed November 5, 2026 against Muse commit `17f7ae3c2b070bcfebf1362b0c9f3ba12dc6697b` and device-protocol commit `f34517c`.
 
-The current project is a prototype of signed device commands, a status display and a snapshot mirror. The intended agent-home experience still requires agent tool integration, a persistent device lifecycle, media, and deployment support. Passing the current tests establishes the implemented subset. Those tests do not exercise an agent answering a chat request with a device operation, authenticated voice sessions, live camera streams, or adversarial agents sharing an OS account.
+At the audited commit, the project was a prototype of signed device commands, a status display and a snapshot mirror. The intended agent-home experience still requires agent tool integration, a persistent device lifecycle, media, and deployment support. Passing the current tests establishes the implemented subset. Those tests do not exercise an agent answering a chat request with a device operation, authenticated voice sessions, live camera streams, or adversarial agents sharing an OS account.
+
+## Implementation follow-up
+
+The subsequent implementation adds MCP tools, a protected Linux signer, monitor notifications, signed media sessions and local consent/stop controls. Maestro and plugin integration ship as companion changes. See [agent-tools.md](agent-tools.md) for setup and exact boundaries, including separate Linux runtime UIDs and the need for physical hardware testing.
 
 ## Reported issues
 

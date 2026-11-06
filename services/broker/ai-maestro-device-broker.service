@@ -1,0 +1,22 @@
+[Unit]
+Description=AI Maestro protected device signer
+After=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/ai-maestro-device/broker.env
+RuntimeDirectory=ai-maestro-device
+RuntimeDirectoryMode=0755
+ExecStartPre=/usr/bin/rm -f /run/ai-maestro-device/broker.sock
+ExecStart=/usr/bin/python3 ${ADP_REPO}/services/broker/server.py --policy /etc/ai-maestro-device/broker.json --socket /run/ai-maestro-device/broker.sock --node ${ADP_NODE} --worker ${ADP_REPO}/services/broker/worker.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/run/ai-maestro-device
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -1,11 +1,12 @@
 import http from "node:http";
 import { readFileSync } from "node:fs";
-import { agentAddress } from "@ai-maestro/device-sdk";
+import { agentAddress, nonce } from "@ai-maestro/device-sdk";
 
 export class DisplayState {
   constructor(getPeer, now = Date.now) {
     this.getPeer = getPeer;
     this.now = now;
+    this.live = new Set();
   }
   sync(peer) {
     const owner =
@@ -14,8 +15,12 @@ export class DisplayState {
       this.owner = owner;
       this.activity = this.frame = undefined;
       this.order = 0;
+      this.live.clear();
     }
-    if (!peer?.camera || this.frame?.at + 60000 <= this.now())
+    if (
+      (!peer?.camera && !peer?.media?.video) ||
+      this.frame?.at + 60000 <= this.now()
+    )
       this.frame = undefined;
   }
   update(peer, state, order) {
@@ -28,6 +33,14 @@ export class DisplayState {
   capture(peer, value) {
     this.sync(peer);
     this.frame = { at: this.now(), data: Buffer.from(value.data, "base64") };
+  }
+  mediaStarted(peer, kind) {
+    this.sync(peer);
+    this.live.add(kind);
+  }
+  mediaStopped(kind) {
+    this.live.delete(kind);
+    if (kind === "video") this.frame = undefined;
   }
   read() {
     let peer;
@@ -43,6 +56,8 @@ export class DisplayState {
       agent: peer?.assignedAgent ?? null,
       state: fresh ? this.activity.state : "disconnected",
       camera: peer?.camera === true,
+      mediaConsent: peer?.media ?? {},
+      live: [...this.live],
       frameAt: this.frame?.at ?? null,
     };
   }
@@ -57,8 +72,9 @@ const assets = new Map(
     { type, body: readFileSync(new URL(name, import.meta.url)) },
   ]),
 );
-export function displayServer(display) {
-  return http.createServer((req, res) => {
+export function displayServer(display, controls) {
+  const token = nonce();
+  return http.createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader(
       "Content-Security-Policy",
@@ -66,12 +82,53 @@ export function displayServer(display) {
     );
     res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
     res.setHeader("X-Content-Type-Options", "nosniff");
-    if (
-      req.method !== "GET" ||
-      req.headers.host !== "127.0.0.1:" + req.socket.localPort
-    )
+    if (req.headers.host !== "127.0.0.1:" + req.socket.localPort)
       return res.writeHead(403).end();
-    const state = display.read();
+    if (
+      req.method === "POST" &&
+      controls &&
+      ["/consent", "/stop", "/decision"].includes(req.url)
+    ) {
+      if (
+        req.headers.origin !== "http://" + req.headers.host ||
+        req.headers["x-display-token"] !== token
+      )
+        return res.writeHead(403).end();
+      try {
+        let body = "";
+        for await (const chunk of req) {
+          body += chunk;
+          if (body.length > 1024) return res.writeHead(413).end();
+        }
+        if (req.url === "/decision") {
+          const decision = JSON.parse(body);
+          if (typeof decision.approve !== "boolean")
+            return res.writeHead(400).end();
+          controls.proposals.decide(decision.id, decision.approve);
+          controls.stopAll();
+          return res.writeHead(204).end();
+        }
+        const consent =
+          req.url === "/stop"
+            ? { video: false, microphone: false, speaker: false }
+            : JSON.parse(body);
+        controls.setConsent(consent);
+        controls.stopAll();
+        return res.writeHead(204).end();
+      } catch {
+        return res.writeHead(400).end();
+      }
+    }
+    if (req.method !== "GET") return res.writeHead(405).end();
+    const state = {
+      ...display.read(),
+      ...(controls
+        ? {
+            controlToken: token,
+            pending: controls.proposals?.pending() ?? null,
+          }
+        : {}),
+    };
     if (req.url === "/state")
       return res
         .writeHead(200, { "Content-Type": "application/json" })

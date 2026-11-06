@@ -15,6 +15,8 @@ export type Response = { id: string; to: string; challenge: string } & (
       version: 1;
       events?: string[];
       streams: string[];
+      permissions?: Record<string, boolean>;
+      localApproval?: boolean;
     }
   | {
       type: "result";
@@ -50,3 +52,12 @@ export function publishActivity(
   state: ActivityState,
   fetcher?: typeof fetch,
 ): Promise<{ type: "activity.ack"; id: string; to: string; challenge: string }>;
+
+export function exchange(
+  origin: string,
+  self: Identity,
+  device: string,
+  command: Record<string, unknown>,
+  responseType: string,
+  fetcher?: typeof fetch,
+): Promise<Record<string, unknown>>;

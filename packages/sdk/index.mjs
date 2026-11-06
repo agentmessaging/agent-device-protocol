@@ -123,7 +123,14 @@ export function publishActivity(
     fetcher,
   );
 }
-async function exchange(origin, self, device, command, responseType, fetcher) {
+export async function exchange(
+  origin,
+  self,
+  device,
+  command,
+  responseType,
+  fetcher,
+) {
   const base = privateOrigin(origin);
   const options = { redirect: "error", signal: AbortSignal.timeout(15000) };
   const hello = await fetcher(base + "/v1/challenge", options);

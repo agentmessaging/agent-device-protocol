@@ -263,3 +263,47 @@ aside footer {
     width: min(90vw, 620px);
   }
 }
+
+#consent {
+  border-top: 1px solid #ffffff18;
+  padding: 10px 14px;
+  display: grid;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+#consent[hidden] {
+  display: none;
+}
+#consent label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+#stop-media {
+  border: 1px solid #9a4c43;
+  border-radius: 5px;
+  padding: 8px;
+}
+#media-status {
+  color: #ffb48c;
+}
+
+#proposal {
+  position: relative;
+  z-index: 3;
+  background: #30271b;
+  border: 1px solid #ad8754;
+  margin: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+#proposal[hidden] {
+  display: none;
+}
+#proposal button {
+  padding: 10px;
+  border: 1px solid #ad8754;
+  border-radius: 5px;
+  margin-right: 12px;
+}
