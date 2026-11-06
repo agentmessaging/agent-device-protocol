@@ -1,3 +1,4 @@
+let controlToken, proposal;
 const el = (id) => document.getElementById(id);
 const labels = {
   working: "Working",
@@ -14,7 +15,49 @@ toggle.onclick = () => {
   toggle.setAttribute("aria-expanded", String(expanded));
   toggle.textContent = expanded ? "Reduce" : "Expand";
 };
-function render({ agent, state, camera, frameAt }, offline = false) {
+function render(
+  {
+    agent,
+    state,
+    camera,
+    frameAt,
+    live = [],
+    mediaConsent = {},
+    controlToken: token,
+    pending,
+  },
+  offline = false,
+) {
+  controlToken = token;
+  proposal = pending;
+  el("proposal").hidden = !pending;
+  if (pending) {
+    const change = pending.change;
+    el("proposal-text").textContent =
+      change.action === "transfer"
+        ? "Transfer this home to " +
+          change.agent +
+          "? Verify the new public key: " +
+          change.key
+        : change.action === "revoke"
+          ? "Remove the assigned agent from this home?"
+          : (change.enabled ? "Allow" : "Revoke") +
+            " camera snapshots for the assigned agent?";
+  }
+  el("consent").hidden = !token;
+  for (const input of document.querySelectorAll("[data-media]"))
+    input.checked = mediaConsent[input.dataset.media] === true;
+  el("media-status").textContent = live.length
+    ? live
+        .map((k) =>
+          k === "video"
+            ? "Camera live"
+            : k === "microphone"
+              ? "Mic live"
+              : "Speaker playing",
+        )
+        .join(" · ")
+    : "";
   document.body.dataset.state = state;
   el("name").textContent = agent?.split("@")[0] || "Agent home";
   el("address").textContent = agent || "";
@@ -35,7 +78,8 @@ function render({ agent, state, camera, frameAt }, offline = false) {
       ? "No recent capture"
       : "Camera off";
   el("caption").textContent = src
-    ? "Snapshot · " + new Date(frameAt).toLocaleTimeString()
+    ? (live.includes("video") ? "Camera live · " : "Snapshot · ") +
+      new Date(frameAt).toLocaleTimeString()
     : "Last camera snapshot";
 }
 img.onload = () => {
@@ -59,6 +103,47 @@ async function poll() {
       true,
     );
   }
-  setTimeout(poll, 1000);
+  setTimeout(poll, 200);
 }
 poll();
+
+async function control(path, body) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Display-Token": controlToken,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error("Could not update media permission");
+}
+for (const input of document.querySelectorAll("[data-media]"))
+  input.onchange = async () => {
+    try {
+      await control("/consent", { [input.dataset.media]: input.checked });
+    } catch (error) {
+      el("media-status").textContent = error.message;
+    }
+  };
+el("stop-media").onclick = async () => {
+  try {
+    await control("/stop", {});
+  } catch (error) {
+    el("media-status").textContent = error.message;
+  }
+};
+
+for (const [id, approve] of [
+  ["approve-change", true],
+  ["reject-change", false],
+])
+  el(id).onclick = async () => {
+    if (!proposal) return;
+    try {
+      await control("/decision", { id: proposal.id, approve });
+      el("proposal-error").textContent = "";
+    } catch (error) {
+      el("proposal-error").textContent = error.message;
+    }
+  };

@@ -7,6 +7,10 @@
     ".": {
       "types": "./index.d.ts",
       "default": "./index.mjs"
+    },
+    "./media": {
+      "types": "./media.d.ts",
+      "default": "./media.mjs"
     }
   }
 }

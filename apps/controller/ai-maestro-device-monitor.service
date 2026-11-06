@@ -1,0 +1,14 @@
+[Unit]
+Description=AI Maestro device inventory and activity monitor
+
+[Service]
+Environment=ADP_NODE=/usr/bin/node
+EnvironmentFile=%h/.config/ai-maestro-device/controller.env
+ExecStart=/usr/bin/env ${ADP_NODE} ${ADP_REPO}/apps/controller/cli.mjs monitor
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

@@ -1,11 +1,18 @@
 import { writeFileSync } from "node:fs";
 import { init, pair, self, peer } from "../../packages/sdk/state.mjs";
+import { addDevice } from "./registry.mjs";
+import { installMcp } from "./install.mjs";
+import { monitor } from "./monitor.mjs";
 import { watch } from "./watch.mjs";
 import { announce } from "./announce.mjs";
 import { call } from "@ai-maestro/device-sdk";
 const [action, arg, capability, out, ...extra] = process.argv.slice(2);
 if (action === "init" && !arg) init("agent");
 else if (action === "pair" && !capability) pair(arg);
+else if (action === "install-mcp" && arg && !capability) installMcp(arg);
+else if (action === "monitor" && !arg) await monitor();
+else if (action === "add" && arg && capability && !out)
+  await addDevice(arg, capability);
 else if (action === "watch" && arg && !out) await watch(arg, capability);
 else if (action === "announce" && !out) await announce(arg, capability);
 else if (
@@ -25,5 +32,5 @@ else if (
   if (result.ok === false) process.exitCode = 1;
 } else
   throw new Error(
-    "Usage: init | pair DEVICE_KEY | discover URL | watch URL [ASSIGNED_AMP_ADDRESS] | announce URL [ASSIGNED_AMP_ADDRESS] | invoke URL CAPABILITY [NEW_FILE.jpg]",
+    "Usage: init | pair DEVICE_KEY | install-mcp WORKSPACE | monitor | add DEVICE_NAME URL | discover URL | watch URL [ASSIGNED_AMP_ADDRESS] | announce URL [ASSIGNED_AMP_ADDRESS] | invoke URL CAPABILITY [NEW_FILE.jpg]",
   );

@@ -10,11 +10,11 @@ One locally assigned Maestro agent, identified by its AMP address and exclusive 
 | [Controller](apps/controller) | Pair, discover, invoke, save JPEG, optionally announce capabilities to an AMP agent |
 | [Agent display](apps/display) | Kiosk orb and activity from Maestro, plus a local picture-in-picture mirror of camera snapshots |
 | Future clients | [macOS](clients/macos), [mobile](clients/mobile), [embedded](clients/embedded) |
-| Audio | Microphone and speaker adapter profiles reserved. Streaming is deferred. |
+| Media | Live JPEG camera, microphone PCM/WAV and PCM speaker playback with separate local consent |
 
 ## Implementation status
 
-This is a signed-command and display prototype. The agent-home workflow still needs installed agent tools, automatic lifecycle notifications, shared-host key isolation and live media. Review the [Muse SDK gap audit and delivery criteria](docs/muse-gap-audit.md) before evaluating feature completeness. Other platform directories contain plans.
+The Linux implementation includes fixed MCP agent tools, signed live camera/audio sessions, local media controls, a persistent status/AMP monitor and an optional protected Linux signer. [Install the agent tools and monitor](docs/agent-tools.md). The companion Maestro and plugin changes add the management view and agent skill. Physical camera/audio compatibility and the agent runtime's audio understanding still need verification on each target device. Other platform directories contain plans.
 
 ## Run it
 
