@@ -18,6 +18,10 @@ Read [the controller contract](protocol/controller.md) and [server SDK guide](do
 
 AI Maestro #791 and plugin #99 are on hold while Maestro adopts the controller role directly. Physical MacBook camera/audio acceptance and the agent runtime's audio understanding still need target-device testing. Outbound connections currently carry snapshots, typed operations and text events; live media remains on the HTTP profile. Other platform directories contain plans.
 
+## Planning and repository knowledge
+
+The [versioned wiki](docs/wiki/index.md) contains the [backlog](docs/wiki/backlog/index.md), proposed specifications, source records and decisions. Start with [kiosk memory reliability](docs/wiki/specs/S002-kiosk-memory-lifecycle.md) (reported issue #20) and [portable agent avatars](docs/wiki/specs/S001-portable-agent-avatars.md). These are plans, not shipped features or a claim that the kiosk bug is fixed. [Contributor instructions](AGENTS.md) explain how to keep the records current.
+
 ## Run it
 
 Follow the [two-machine Omarchy runbook](docs/omarchy.md) to pair Mini Lola with the 2010 MacBook, run health, and opt into camera access. [The integration notes](docs/integration.md) map this implementation to Muse and Maestro and explain its trust boundary.
