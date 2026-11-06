@@ -72,7 +72,8 @@ export class Controller {
       name,
       endpoint: origin,
       verified: old?.verified ?? false,
-      state: old?.state ?? "unverified",
+      state:
+        old?.state === "revoked" ? "unverified" : (old?.state ?? "unverified"),
       owner: old?.owner ?? null,
       capabilities: old?.capabilities ?? [],
       failures: 0,
@@ -131,6 +132,7 @@ export class Controller {
     }
   }
   invalidate(a, d, state = "revoked") {
+    d.authorityGeneration = (d.authorityGeneration ?? 0) + 1;
     d.verified = false;
     d.owner = null;
     if (a.active === d.key) this.jump(a.address, null);
@@ -142,12 +144,21 @@ export class Controller {
   }
   async refresh(address, key) {
     const [a, d] = this.device(address, key);
+    const authorityGeneration = d.authorityGeneration ?? 0;
     try {
       const registration = await this.transport.call(
         d.endpoint,
         a.identity,
         key,
       );
+      if (
+        (d.authorityGeneration ?? 0) !== authorityGeneration ||
+        a.devices.get(key) !== d
+      ) {
+        const error = new Error("Discovery superseded by an ownership change");
+        error.code = "SUPERSEDED";
+        throw error;
+      }
       if (registration.assignedAgent !== address) {
         this.invalidate(a, d);
         throw new Error("Device belongs to another agent");
@@ -181,6 +192,7 @@ export class Controller {
       this.changed();
       return structuredClone(d);
     } catch (error) {
+      if (error.code === "SUPERSEDED") throw error;
       if (/403|another agent/.test(error.message)) this.invalidate(a, d);
       else if (++d.failures >= 3 || typeof d.endpoint === "object") {
         if (d.state !== "offline") {
