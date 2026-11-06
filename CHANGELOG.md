@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The `agent-devices` skill and `adp-device.sh`, the agent's command.
 - Display: render only when the state changes, bound presence and control requests, and reload an idle kiosk after six hours while #20 is open.
 
 ## [0.1.0] - 2026-11-06 - Public debut

@@ -45,6 +45,10 @@ Devices either answer on HTTP or open their own connection to the controller ([p
 | Future clients | [macOS](clients/macos), [mobile](clients/mobile), [embedded](clients/embedded) |
 | Media | Live JPEG camera, microphone PCM/WAV and PCM speaker playback with separate local consent |
 
+## For agents
+
+[skills/agent-devices](skills/agent-devices/SKILL.md) teaches an agent to use its devices, and [scripts/adp-device.sh](scripts/adp-device.sh) is its command, as in the sister protocols. AI Maestro ships both in its plugin.
+
 ## Status
 
 - Controller role, SDK, Linux device bridge, typed capabilities, device-opened connections, local approvals and the conformance suite are in place.
