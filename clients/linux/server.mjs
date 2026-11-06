@@ -1,4 +1,11 @@
 import http from "node:http";
+import { sameChange } from "../../packages/sdk/changes.mjs";
+import {
+  builtinCapabilities,
+  validateArguments,
+  imageBytes,
+} from "../../packages/sdk/capabilities.mjs";
+import { speechReady, say } from "./output.mjs";
 import { mediaFormats } from "../../packages/sdk/media.mjs";
 import { agentAddress, nonce, open, seal } from "@ai-maestro/device-sdk";
 import { cameraReady, snapshot } from "./hardware.mjs";
@@ -10,7 +17,10 @@ export function bridge(
   display,
   media,
   proposals,
+  custom,
 ) {
+  const indicatorReady = () =>
+    hardware.indicatorReady?.() ?? display?.indicatorReady() ?? false;
   const challenges = new Map();
   let captureOwner;
   let sequence = 0;
@@ -58,7 +68,7 @@ export function bridge(
           if (
             msg.type !== "proposal" ||
             msg.requestId !== receipt.id ||
-            JSON.stringify(msg.change) !== JSON.stringify(receipt.change)
+            !sameChange(msg.change, receipt.change)
           )
             throw new Error("Revoked");
           peer = { key: receipt.ownerKey };
@@ -89,17 +99,38 @@ export function bridge(
             type: "proposal.ack",
             requestId: msg.requestId,
             status: proposals.receipt().status,
+            revision: proposals.receipt().revision,
+            assignedAgent: proposals.receipt().assignedAgent,
           });
         const capabilities = ["device.health"];
-        if (peer.camera === true && hardware.cameraReady())
+        if (peer.camera === true && hardware.cameraReady() && indicatorReady())
           capabilities.push("camera.snapshot");
+        const definitions = {
+          ...Object.fromEntries(
+            capabilities.map((name) => [name, builtinCapabilities[name]]),
+          ),
+          ...(custom?.definitions(peer) ?? {}),
+        };
+        for (const name of ["display.text", "display.image", "speaker.say"]) {
+          if (
+            peer.outputs?.[name] === true &&
+            (name === "speaker.say" ? speechReady() : !!display)
+          ) {
+            capabilities.push(name);
+            definitions[name] = builtinCapabilities[name];
+          }
+        }
+        for (const name of Object.keys(definitions))
+          if (name.startsWith("custom.")) capabilities.push(name);
         if (msg.type === "discover")
           return result({
             type: "register",
             version: 1,
             bootId,
+            revision: peer.revision,
             assignedAgent,
             capabilities,
+            capabilityDefinitions: definitions,
             streams: media?.advertised(peer) ?? [],
             mediaFormats: Object.fromEntries(
               (media?.advertised(peer) ?? []).map((kind) => [
@@ -107,13 +138,19 @@ export function bridge(
                 mediaFormats[kind],
               ]),
             ),
-            permissions: { camera: peer.camera === true, ...peer.media },
+            permissions: {
+              camera: peer.camera === true,
+              ...peer.media,
+              ...peer.outputs,
+              ...peer.custom,
+            },
             ...(proposals ? { localApproval: true } : {}),
             ...(display ? { events: ["activity"] } : {}),
           });
         if (msg.type === "activity" && display) {
           if (
             msg.assignedAgent !== assignedAgent ||
+            (msg.active !== undefined && typeof msg.active !== "boolean") ||
             !["working", "waiting", "idle", "unknown"].includes(msg.state) ||
             Object.keys(msg).some(
               (k) =>
@@ -124,11 +161,12 @@ export function bridge(
                   "to",
                   "assignedAgent",
                   "state",
+                  "active",
                 ].includes(k),
             )
           )
             return reply(400, { error: "invalid_activity" });
-          if (!display.update(peer, msg.state, ticket.order))
+          if (!display.update(peer, msg.state, ticket.order, msg.active))
             return reply(409, { error: "superseded" });
           return result({ type: "activity.ack" });
         }
@@ -144,16 +182,23 @@ export function bridge(
                   "to",
                   "requestId",
                   "change",
+                  "expectedRevision",
                 ].includes(k),
             )
           )
             return reply(400, { error: "invalid_proposal" });
           try {
-            const pending = proposals.request(msg.requestId, msg.change);
+            const pending = proposals.request(
+              msg.requestId,
+              msg.change,
+              msg.expectedRevision,
+            );
             return result({
               type: "proposal.ack",
               requestId: pending.id,
               status: pending.status,
+              revision: pending.revision,
+              assignedAgent: pending.assignedAgent,
             });
           } catch {
             return reply(409, { error: "proposal_rejected" });
@@ -270,13 +315,87 @@ export function bridge(
           );
           return;
         }
-        const allowedFields = ["to", "id", "challenge", "type", "capability"];
+        const allowedFields = [
+          "to",
+          "id",
+          "challenge",
+          "type",
+          "capability",
+          "args",
+        ];
         if (
           msg.type !== "invoke" ||
           Object.keys(msg).some((k) => !allowedFields.includes(k)) ||
           !capabilities.includes(msg.capability)
         )
           return result({ type: "result", ok: false, error: "denied" });
+        try {
+          validateArguments(definitions[msg.capability].args, msg.args ?? {});
+          if (msg.capability === "display.image") imageBytes(msg.args);
+        } catch {
+          return result({
+            type: "result",
+            ok: false,
+            error: "invalid_arguments",
+          });
+        }
+        if (
+          ["display.text", "display.image", "speaker.say"].includes(
+            msg.capability,
+          ) ||
+          msg.capability.startsWith("custom.")
+        ) {
+          const abort = new AbortController();
+          const check = () => {
+            try {
+              const p = getPeer();
+              if (
+                p.key !== peer.key ||
+                p.assignedAgent !== peer.assignedAgent ||
+                p.revision !== peer.revision
+              )
+                abort.abort();
+            } catch {
+              abort.abort();
+            }
+          };
+          const timer = setInterval(check, 100);
+          res.on("close", () => {
+            if (!res.writableEnded) abort.abort();
+          });
+          try {
+            let value;
+            if (msg.capability === "speaker.say")
+              value = await say(msg.args.text, abort.signal);
+            else if (msg.capability.startsWith("custom."))
+              value = await custom.invoke(
+                msg.capability,
+                msg.args ?? {},
+                peer,
+                abort.signal,
+              );
+            else {
+              display.show(peer, msg.args);
+              value = { shown: true };
+            }
+            check();
+            if (abort.signal.aborted)
+              return result({
+                type: "result",
+                ok: false,
+                error: "grant_revoked",
+              });
+            return result({ type: "result", ok: true, value });
+          } catch {
+            return result({
+              type: "result",
+              ok: false,
+              error: "hardware_unavailable",
+            });
+          } finally {
+            clearInterval(timer);
+          }
+        }
         if (msg.capability === "device.health")
           return result({
             type: "result",
@@ -290,14 +409,37 @@ export function bridge(
             error: "hardware_unavailable",
           });
         captureOwner = { key: peer.key, assignedAgent };
+        const captureAbort = new AbortController();
+        const captureTimer = setInterval(() => {
+          try {
+            const p = getPeer();
+            if (
+              !indicatorReady() ||
+              p.key !== peer.key ||
+              p.revision !== peer.revision
+            )
+              captureAbort.abort();
+          } catch {
+            captureAbort.abort();
+          }
+        }, 100);
+        res.on("close", () => {
+          if (!res.writableEnded) captureAbort.abort();
+        });
         try {
-          const value = await hardware.snapshot();
+          if (hardware.indicate) await hardware.indicate("camera");
+          else await display.indicate("camera");
+          if (captureAbort.signal.aborted) throw new Error("Capture stopped");
+          const value = await hardware.snapshot(captureAbort.signal);
+          if (res.destroyed) return;
           const current = getPeer();
           if (
             current.key !== peer.key ||
             current.assignedAgent !== assignedAgent ||
             current.revision !== peer.revision ||
-            current.camera !== true
+            current.camera !== true ||
+            !indicatorReady() ||
+            captureAbort.signal.aborted
           )
             return reply(403, { error: "grant_revoked" });
           display?.capture(peer, value);
@@ -309,6 +451,7 @@ export function bridge(
             error: "hardware_unavailable",
           });
         } finally {
+          clearInterval(captureTimer);
           captureOwner = undefined;
         }
       } catch {

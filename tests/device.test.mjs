@@ -21,7 +21,12 @@ async function setup(t) {
     key: controller.key,
     camera: false,
   };
-  const hardware = { cameraReady: () => true, snapshot: async () => jpeg };
+  const hardware = {
+    cameraReady: () => true,
+    indicatorReady: () => true,
+    indicate: async () => {},
+    snapshot: async () => jpeg,
+  };
   const server = bridge(device, () => ({ ...policy }), hardware);
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -85,7 +90,10 @@ test("shell, media streams and unrecognized arguments fail closed", async (t) =>
     id: nonce(),
   };
   const response = await s.post(seal(msg, s.controller.secret));
-  assert.equal(open(await response.json(), s.device.key).error, "denied");
+  assert.equal(
+    open(await response.json(), s.device.key).error,
+    "invalid_arguments",
+  );
 });
 test("tampering, unpaired callers, and wrong audience are rejected", async (t) => {
   const s = await setup(t);

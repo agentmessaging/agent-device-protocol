@@ -22,6 +22,8 @@ test("agent MCP negotiates, lists fixed tools and returns only configured device
     }),
     {
       cameraReady: () => true,
+      indicatorReady: () => true,
+      indicate: async () => {},
       snapshot: async () => ({ mime: "image/jpeg", data: "/9j/2Q==" }),
     },
   );
@@ -107,6 +109,10 @@ test("agent MCP negotiates, lists fixed tools and returns only configured device
         },
       },
     }),
+  );
+  writeFileSync(
+    join(dir, "active.json"),
+    JSON.stringify({ key: device.key, epoch: "test" }),
   );
   const snapshot = (
     await request({

@@ -7,13 +7,37 @@ export class DisplayState {
     this.getPeer = getPeer;
     this.now = now;
     this.live = new Set();
+    this.indicators = new Map();
+    this.indicatorId = nonce();
+  }
+  ackPresence(visible, indicatorId) {
+    this.visible = visible === true;
+    this.seenAt = this.now();
+    if (this.visible && indicatorId === this.indicatorId)
+      this.indicatorAck = indicatorId;
+  }
+  indicatorReady() {
+    return this.visible === true && this.now() - this.seenAt < 1000;
+  }
+  async indicate(kind) {
+    if (!this.indicatorReady())
+      throw new Error("Visible local indicator unavailable");
+    this.indicatorId = nonce();
+    this.indicators.set(kind, this.now() + 3000);
+    const deadline = Date.now() + 1000;
+    while (this.indicatorAck !== this.indicatorId) {
+      if (!this.indicatorReady() || Date.now() > deadline)
+        throw new Error("Local indicator was not displayed");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    this.indicators.set(kind, this.now() + 3000);
   }
   sync(peer) {
     const owner =
       peer && JSON.stringify([peer.key, peer.assignedAgent, peer.revision]);
     if (owner !== this.owner) {
       this.owner = owner;
-      this.activity = this.frame = undefined;
+      this.activity = this.frame = this.output = undefined;
       this.order = 0;
       this.live.clear();
     }
@@ -23,16 +47,20 @@ export class DisplayState {
     )
       this.frame = undefined;
   }
-  update(peer, state, order) {
+  update(peer, state, order, active) {
     this.sync(peer);
     if (order <= this.order) return false;
     this.order = order;
-    this.activity = { state, at: this.now() };
+    this.activity = { state, active, at: this.now() };
     return true;
   }
   capture(peer, value) {
     this.sync(peer);
     this.frame = { at: this.now(), data: Buffer.from(value.data, "base64") };
+  }
+  show(peer, value) {
+    this.sync(peer);
+    this.output = { ...value, at: this.now() };
   }
   mediaStarted(peer, kind) {
     this.sync(peer);
@@ -55,9 +83,25 @@ export class DisplayState {
     return {
       agent: peer?.assignedAgent ?? null,
       state: fresh ? this.activity.state : "disconnected",
+      active: fresh ? (this.activity.active ?? null) : null,
       camera: peer?.camera === true,
       mediaConsent: peer?.media ?? {},
+      outputConsent: peer?.outputs ?? {},
+      output:
+        this.output && this.now() - this.output.at < 60000 ? this.output : null,
       live: [...this.live],
+      indicators: [
+        ...new Set(
+          [...this.live]
+            .filter((k) => k !== "speaker")
+            .concat(
+              [...this.indicators]
+                .filter(([, until]) => until > this.now())
+                .map(([kind]) => kind),
+            ),
+        ),
+      ],
+      indicatorId: this.indicatorId,
       frameAt: this.frame?.at ?? null,
     };
   }
@@ -87,7 +131,15 @@ export function displayServer(display, controls) {
     if (
       req.method === "POST" &&
       controls &&
-      ["/consent", "/stop", "/decision"].includes(req.url)
+      [
+        "/consent",
+        "/stop",
+        "/decision",
+        "/used",
+        "/input",
+        "/outputs",
+        "/presence",
+      ].includes(req.url)
     ) {
       if (
         req.headers.origin !== "http://" + req.headers.host ||
@@ -98,7 +150,28 @@ export function displayServer(display, controls) {
         let body = "";
         for await (const chunk of req) {
           body += chunk;
-          if (body.length > 1024) return res.writeHead(413).end();
+          if (body.length > (req.url === "/input" ? 25000 : 1024))
+            return res.writeHead(413).end();
+        }
+        if (req.url === "/presence") {
+          const p = JSON.parse(body);
+          display.ackPresence(p.visible, p.indicatorId);
+          return res.writeHead(204).end();
+        }
+        if (req.url === "/outputs") {
+          controls.setOutputs(JSON.parse(body));
+          return res.writeHead(204).end();
+        }
+        if (req.url === "/input") {
+          const input = JSON.parse(body);
+          if (Object.keys(input).join() !== "text")
+            throw new Error("Invalid input");
+          await controls.input(input.text);
+          return res.writeHead(204).end();
+        }
+        if (req.url === "/used") {
+          await controls.used();
+          return res.writeHead(204).end();
         }
         if (req.url === "/decision") {
           const decision = JSON.parse(body);
@@ -106,6 +179,7 @@ export function displayServer(display, controls) {
             return res.writeHead(400).end();
           controls.proposals.decide(decision.id, decision.approve);
           controls.stopAll();
+          await controls.afterDecision?.(controls.proposals.receipt());
           return res.writeHead(204).end();
         }
         const consent =
@@ -125,6 +199,7 @@ export function displayServer(display, controls) {
       ...(controls
         ? {
             controlToken: token,
+            canUse: typeof controls.used === "function",
             pending: controls.proposals?.pending() ?? null,
           }
         : {}),
@@ -133,6 +208,10 @@ export function displayServer(display, controls) {
       return res
         .writeHead(200, { "Content-Type": "application/json" })
         .end(JSON.stringify(state));
+    if (state.output?.data && req.url === "/output/" + state.output.at)
+      return res
+        .writeHead(200, { "Content-Type": state.output.mime })
+        .end(Buffer.from(state.output.data, "base64"));
     if (display.frame && req.url === "/frame/" + state.frameAt)
       return res
         .writeHead(200, { "Content-Type": "image/jpeg" })

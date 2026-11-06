@@ -16,6 +16,7 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       - run: npm ci --ignore-scripts
       - run: systemd-analyze verify clients/linux/ai-maestro-device.service
+      - run: npm run typecheck
       - run: npm test
       - run: bash tests/smoke.sh
       - run: node tests/browser-smoke.mjs

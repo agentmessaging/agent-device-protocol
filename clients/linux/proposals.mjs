@@ -1,25 +1,5 @@
-import { agentAddress, publicKey } from "@ai-maestro/device-sdk";
-
-export function validateChange(change) {
-  if (!change || typeof change !== "object" || Array.isArray(change))
-    throw new Error("Invalid change");
-  if (
-    change.action === "transfer" &&
-    Object.keys(change).every((k) => ["action", "agent", "key"].includes(k))
-  ) {
-    agentAddress(change.agent);
-    publicKey(change.key);
-    return;
-  }
-  if (
-    change.action === "camera" &&
-    typeof change.enabled === "boolean" &&
-    Object.keys(change).every((k) => ["action", "enabled"].includes(k))
-  )
-    return;
-  if (change.action === "revoke" && Object.keys(change).length === 1) return;
-  throw new Error("Unsupported device change");
-}
+import { validateChange, sameChange } from "../../packages/sdk/changes.mjs";
+export { validateChange };
 export class Proposals {
   constructor(getPeer, load, save, apply) {
     Object.assign(this, { getPeer, load, save, apply });
@@ -45,19 +25,22 @@ export class Proposals {
       return null;
     return request;
   }
-  request(id, change) {
+  request(id, change, expectedRevision) {
     validateChange(change);
     const receipt = this.receipt();
     if (receipt?.id === id) {
-      if (JSON.stringify(receipt.change) !== JSON.stringify(change))
+      if (!sameChange(receipt.change, change))
         throw new Error("Request ID reused");
       return receipt;
     }
+    const current = this.getPeer();
+    if (expectedRevision !== undefined && expectedRevision !== current.revision)
+      return { id, status: "revision_mismatch", revision: current.revision };
     const pending = this.pending();
     if (pending && pending.id !== id)
       throw new Error("A change already awaits local approval");
     if (pending) {
-      if (JSON.stringify(pending.change) !== JSON.stringify(change))
+      if (!sameChange(pending.change, change))
         throw new Error("Request ID reused");
       return pending;
     }
@@ -84,11 +67,19 @@ export class Proposals {
     if (!request || request.id !== id)
       throw new Error("Change expired or was superseded");
     if (approve) this.apply(request.change);
+    let current;
+    try {
+      current = this.getPeer();
+    } catch {
+      current = null;
+    }
     this.save({
       pending: null,
       receipt: {
         ...request,
         status: approve ? "confirmed" : "rejected",
+        revision: current?.revision ?? null,
+        assignedAgent: current?.assignedAgent ?? null,
         expiresAt: Date.now() + 86400000,
       },
     });

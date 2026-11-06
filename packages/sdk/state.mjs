@@ -118,11 +118,52 @@ export function applyLocalChange(change) {
   const current = peer();
   if (change.action === "transfer")
     pair(change.key, { assignedAgent: change.agent });
-  else if (change.action === "revoke") unlinkSync(join(dir, "peer.json"));
+  else if (change.action === "revoke")
+    writeLocal("peer.json", {
+      key: null,
+      assignedAgent: null,
+      revision: nonce(),
+      camera: false,
+    });
   else if (change.action === "camera")
     writeLocal("peer.json", {
       ...current,
       camera: change.enabled,
       revision: nonce(),
     });
+}
+
+// Controller inventory is separate from the device's single local owner pin.
+export { ControllerState } from "./controller-state.mjs";
+
+export function setOutputConsent(grants) {
+  if (
+    !grants ||
+    typeof grants !== "object" ||
+    Array.isArray(grants) ||
+    Object.keys(grants).some(
+      (k) => !["display.text", "display.image", "speaker.say"].includes(k),
+    ) ||
+    Object.values(grants).some((v) => typeof v !== "boolean")
+  )
+    throw new Error("Invalid output grant");
+  const current = peer();
+  writeLocal("peer.json", {
+    ...current,
+    outputs: { ...current.outputs, ...grants },
+    revision: nonce(),
+  });
+}
+export function setCustomConsent(name, enabled) {
+  if (
+    !/^custom\.[a-z][a-z0-9_-]{0,31}\.[a-z][a-z0-9_-]{0,31}$/.test(name) ||
+    typeof enabled !== "boolean"
+  )
+    throw new Error("Invalid custom grant");
+  const current = peer();
+  writeLocal("peer.json", {
+    ...current,
+    custom: { ...current.custom, [name]: enabled },
+    revision: nonce(),
+  });
 }

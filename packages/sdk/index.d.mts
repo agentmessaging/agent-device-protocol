@@ -6,7 +6,14 @@ export interface Packet {
   body: string;
   signature: string;
 }
-export type Capability = "device.health" | "camera.snapshot";
+export type DeviceEndpoint = string | { reverse: string };
+export type Capability =
+  | "device.health"
+  | "camera.snapshot"
+  | "display.text"
+  | "display.image"
+  | "speaker.say"
+  | `custom.${string}`;
 export type Response = { id: string; to: string; challenge: string } & (
   | {
       type: "register";
@@ -17,6 +24,8 @@ export type Response = { id: string; to: string; challenge: string } & (
       streams: string[];
       permissions?: Record<string, boolean>;
       localApproval?: boolean;
+      revision?: string;
+      capabilityDefinitions?: Record<string, unknown>;
     }
   | {
       type: "result";
@@ -36,7 +45,7 @@ export function privateOrigin(value: string): string;
 export function seal(data: unknown, secret: string): Packet;
 export function open(packet: Packet, key: string): unknown;
 export function call(
-  origin: string,
+  origin: DeviceEndpoint,
   self: Identity,
   device: string,
   capability?: Capability,
@@ -45,16 +54,17 @@ export function call(
 
 export type ActivityState = "working" | "waiting" | "idle" | "unknown";
 export function publishActivity(
-  origin: string,
+  origin: DeviceEndpoint,
   self: Identity,
   device: string,
   assignedAgent: string,
   state: ActivityState,
   fetcher?: typeof fetch,
+  active?: boolean,
 ): Promise<{ type: "activity.ack"; id: string; to: string; challenge: string }>;
 
 export function exchange(
-  origin: string,
+  origin: DeviceEndpoint,
   self: Identity,
   device: string,
   command: Record<string, unknown>,

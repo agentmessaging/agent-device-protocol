@@ -24,6 +24,7 @@ export async function publishSession(
   source,
   controller,
   device,
+  active,
 ) {
   const name = agentAddress(agent).split("@")[0];
   const options = { redirect: "error", signal: AbortSignal.timeout(4000) };
@@ -48,7 +49,15 @@ export async function publishSession(
   });
   if (!response.ok) throw new Error("Maestro activity HTTP " + response.status);
   const state = sessionState(await response.json(), agent);
-  await publishActivity(origin, controller, device, agent, state);
+  await publishActivity(
+    origin,
+    controller,
+    device,
+    agent,
+    state,
+    fetch,
+    active,
+  );
   return state;
 }
 export async function watch(origin, agent) {

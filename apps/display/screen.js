@@ -1,4 +1,4 @@
-let controlToken, proposal;
+let controlToken, proposal, lastIndicator;
 const el = (id) => document.getElementById(id);
 const labels = {
   working: "Working",
@@ -23,11 +23,28 @@ function render(
     frameAt,
     live = [],
     mediaConsent = {},
+    outputConsent = {},
+    output,
     controlToken: token,
     pending,
+    active,
+    canUse,
+    indicators = [],
+    indicatorId,
   },
   offline = false,
 ) {
+  el("device-mode").textContent =
+    active === true ? "Active device" : active === false ? "Idle device" : "";
+  el("use-device").hidden = !canUse;
+  el("device-input").hidden = !canUse;
+  const sign = el("capture-indicator");
+  sign.hidden = !indicators.length;
+  sign.textContent = indicators
+    .map((k) => (k === "microphone" ? "Microphone in use" : "Camera in use"))
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .join(" · ");
+  lastIndicator = indicatorId;
   controlToken = token;
   proposal = pending;
   el("proposal").hidden = !pending;
@@ -47,6 +64,16 @@ function render(
   el("consent").hidden = !token;
   for (const input of document.querySelectorAll("[data-media]"))
     input.checked = mediaConsent[input.dataset.media] === true;
+  for (const input of document.querySelectorAll("[data-output]"))
+    input.checked = outputConsent[input.dataset.output] === true;
+  el("agent-output").hidden = !output;
+  el("output-text").textContent = output?.text ?? "";
+  const outputImage = el("output-image");
+  outputImage.hidden = !output?.data;
+  const outputSrc = output?.data ? "/output/" + output.at : null;
+  if (outputSrc && outputImage.getAttribute("src") !== outputSrc)
+    outputImage.src = outputSrc;
+  if (!outputSrc) outputImage.removeAttribute("src");
   el("media-status").textContent = live.length
     ? live
         .map((k) =>
@@ -97,6 +124,16 @@ async function poll() {
     });
     if (!response.ok) throw new Error();
     render(await response.json());
+    if (controlToken && document.visibilityState === "visible") {
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          control("/presence", {
+            visible: document.visibilityState === "visible",
+            indicatorId: lastIndicator,
+          }).catch(() => {});
+        }),
+      );
+    }
   } catch {
     render(
       { agent: null, state: "disconnected", camera: false, frameAt: null },
@@ -145,5 +182,42 @@ for (const [id, approve] of [
       el("proposal-error").textContent = "";
     } catch (error) {
       el("proposal-error").textContent = error.message;
+    }
+  };
+
+el("use-device").onclick = async () => {
+  try {
+    await control("/used", {});
+  } catch (error) {
+    el("media-status").textContent = error.message;
+  }
+};
+
+el("device-input").onsubmit = async (event) => {
+  event.preventDefault();
+  try {
+    await control("/input", { text: el("input-text").value });
+    el("input-text").value = "";
+    el("input-status").textContent = "Sent to your agent";
+  } catch {
+    el("input-status").textContent =
+      "Could not send. Check the connection and try again.";
+  }
+};
+
+document.addEventListener("visibilitychange", () => {
+  if (controlToken)
+    control("/presence", {
+      visible: document.visibilityState === "visible",
+      indicatorId: lastIndicator,
+    }).catch(() => {});
+});
+
+for (const input of document.querySelectorAll("[data-output]"))
+  input.onchange = async () => {
+    try {
+      await control("/outputs", { [input.dataset.output]: input.checked });
+    } catch (error) {
+      el("media-status").textContent = error.message;
     }
   };

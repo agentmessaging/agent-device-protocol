@@ -5,7 +5,12 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { publishDashboard, processRequests } from "./dashboard.mjs";
 import { call, privateOrigin } from "@ai-maestro/device-sdk";
-import { config, optionalState, save } from "./registry.mjs";
+import {
+  config,
+  optionalState,
+  save,
+  state as controllerState,
+} from "./registry.mjs";
 import { self, dir } from "../../packages/sdk/state.mjs";
 import { publishSession } from "./watch.mjs";
 
@@ -23,7 +28,7 @@ export function transition(previous, observed, now) {
     ? "online"
     : observed.revoked
       ? "revoked"
-      : failures >= 3
+      : observed.disconnected || failures >= 3
         ? "offline"
         : (previous?.state ?? "connecting");
   return {
@@ -92,8 +97,12 @@ export async function monitorOnce(deps = {}) {
           online: false,
           assignedAgent: registry.agent,
           revoked: /403/.test(error.message),
+          disconnected: typeof device.origin === "object",
         };
       }
+      const ownerState = deps.state ?? (deps.config ? null : controllerState);
+      if (observed.revoked) ownerState?.clearIfActive(device.key);
+      observed.active = ownerState?.active().key === device.key;
       const record = transition(
         previous.devices[name],
         observed,
@@ -130,6 +139,31 @@ export async function monitorOnce(deps = {}) {
       }
     }),
   );
+  if (!deps.config) {
+    for (const event of optionalState("input-events.json", []).slice(0, 4)) {
+      try {
+        await exec(
+          "amp-send",
+          [
+            event.agent,
+            "Input from agent home",
+            JSON.stringify({ type: "device.input", ...event }),
+            "--type",
+            "notification",
+          ],
+          { timeout: 15000, maxBuffer: 65536 },
+        );
+        save(
+          "input-events.json",
+          optionalState("input-events.json", []).filter(
+            (e) => e.id !== event.id,
+          ),
+        );
+      } catch {
+        break;
+      }
+    }
+  }
   const requests = await (deps.requests ?? processRequests)(
     registry,
     identity,
@@ -190,6 +224,7 @@ export async function monitor() {
                   source,
                   identity,
                   d.key,
+                  controllerState.active().key === d.key,
                 );
               } catch {
                 /* Display expires on source failure. Device health is independent. */

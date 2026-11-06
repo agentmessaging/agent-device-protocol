@@ -1,6 +1,6 @@
 # Pair the Omarchy MacBook with Mini Lola
 
-The MacBook serves its local hardware. Mini Lola runs the controller alongside Maestro. Both hosts need an authenticated GitHub account with read access to this private repository. Use the same desktop user each time. Run the bridge without sudo.
+The MacBook serves its local hardware. AI Maestro implements the controller role for its agents. The commands below use the standalone reference controller to test a device before that direct integration is available. Both hosts need an authenticated GitHub account with read access to this private repository. Use the same desktop user each time. Run the bridge without sudo.
 
 ## 1. Install on the MacBook
 
@@ -57,9 +57,9 @@ node clients/linux/cli.mjs init
 tailscale ip -4
 ```
 
-On **Mini Lola**, launch the chosen agent and its controller under a dedicated OS account or an isolated container. Only that agent may read its key or call its signer. Maestro agents running unrestricted as the same OS user can impersonate each other. Separate directories alone do not isolate them. For an upgrade from a shared controller, initialize a fresh key inside the isolated account and stop the old bridge before replacing it.
+On **Mini Lola**, use your normal controller account. Each agent has its own controller key and full AMP address. Programs that can use a key have that agent's authority; sharing a system user is an accepted deployment choice. Optional account isolation and the reference broker are described in [agent-tools.md](agent-tools.md).
 
-From the chosen agent's isolated environment:
+From the controller environment:
 
 ```sh
 node apps/controller/cli.mjs init
@@ -68,7 +68,7 @@ node apps/controller/cli.mjs pair DEVICE_PUBLIC_KEY
 
 Each init prints a role label, state directory and fingerprint to stderr, and the same bare public key to stdout on repeat runs. Command substitution continues to capture only the key. Pairing and assignment print a confirmation with the stored key and policy path. Compare the keys using the physical consoles or another trusted channel. Replace the uppercase placeholders below. Use the MacBook's tailnet IP, not Mini Lola's.
 
-On **Omarchy**, substitute the agent's full Maestro AMP address and the public key printed in its isolated account. This local assignment replaces any previous one. Repeat it with a fresh key when changing agents. Legacy key-only device pairings require a new assignment.
+On **Omarchy**, substitute the agent's full Maestro AMP address and the public key printed by its controller. This local assignment replaces any previous one. Repeat it with a fresh key when changing agents. Legacy key-only device pairings require a new assignment.
 
 ```sh
 node clients/linux/cli.mjs assign AGENT_AMP_ADDRESS AGENT_PUBLIC_KEY
@@ -88,7 +88,7 @@ Expect a signed registration listing `device.health`, followed by a result conta
 
 ### Transfer the MacBook to another agent
 
-Initialize a fresh controller identity inside the next agent's isolated environment and verify its public key. On the MacBook, run:
+Initialize a fresh controller identity inside the next agent's controller profile and verify its public key. On the MacBook, run:
 
 ```sh
 node clients/linux/cli.mjs assign NEW_AGENT_AMP_ADDRESS NEW_AGENT_PUBLIC_KEY
@@ -171,7 +171,7 @@ systemctl --user restart ai-maestro-device
 
 If you started the bridge in the foreground, stop that process instead and relaunch `node clients/linux/cli.mjs serve "$(tailscale ip -4)"`. The same bridge now serves the read-only display separately on loopback. Open **http://127.0.0.1:23111** in the MacBook browser. For full screen on Omarchy, use `chromium --kiosk http://127.0.0.1:23111`.
 
-On Mini Lola, in the assigned agent's isolated controller environment, set DEVICE_URL to the same MacBook URL used for the health test and start:
+On Mini Lola, in the assigned agent's controller environment, set DEVICE_URL to the same MacBook URL used for the health test and start:
 
 ```sh
 node apps/controller/cli.mjs watch "$DEVICE_URL"

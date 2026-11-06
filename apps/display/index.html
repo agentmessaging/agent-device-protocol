@@ -23,6 +23,7 @@
       ><button id="reject-change">Reject</button>
       <p id="proposal-error"></p>
     </section>
+    <div id="capture-indicator" role="status" hidden></div>
     <main>
       <section class="presence" aria-label="Agent activity">
         <div class="signal" aria-hidden="true">
@@ -38,6 +39,27 @@
           <i></i><span id="status">Connecting</span>
         </div>
         <p id="address"></p>
+        <p id="device-mode"></p>
+        <section id="agent-output" hidden aria-label="Agent message">
+          <p id="output-text"></p>
+          <img
+            id="output-image"
+            alt="Image shown by the assigned agent"
+            hidden
+          />
+        </section>
+        <button id="use-device" hidden>Use this device</button>
+        <form id="device-input" hidden>
+          <label for="input-text">Talk to your agent</label>
+          <textarea
+            id="input-text"
+            rows="2"
+            maxlength="4096"
+            required
+          ></textarea>
+          <button type="submit">Send</button>
+          <p id="input-status" role="status"></p>
+        </form>
       </section>
     </main>
     <aside id="pip" aria-label="Camera picture in picture">
@@ -65,6 +87,18 @@
         >
         <label
           ><input type="checkbox" data-media="speaker" /> Allow speaker</label
+        >
+        <label
+          ><input type="checkbox" data-output="display.text" /> Allow agent
+          text</label
+        >
+        <label
+          ><input type="checkbox" data-output="display.image" /> Allow agent
+          images</label
+        >
+        <label
+          ><input type="checkbox" data-output="speaker.say" /> Allow spoken
+          replies</label
         >
         <button id="stop-media">Stop &amp; revoke media</button>
         <span id="media-status" role="status"></span>
