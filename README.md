@@ -2,6 +2,8 @@
 
 **An open protocol for AI agents to own and use real devices.** A laptop, a camera, a screen in the kitchen: signed, approved on the device itself, and with no cloud in the middle.
 
+Website: **[agentdevices.org](https://agentdevices.org)**
+
 Status: **v1, experimental.** Companion to [AMP](https://agentmessaging.org) (messages), [AID](https://agentids.org) (identity), [AAP](https://agentactions.org) (UI actions) and [AFP](https://agentfiles.org) (files). Reference controller: [AI Maestro](https://aimaestro.sh).
 
 ## The idea
