@@ -20,6 +20,7 @@ export class Controller {
     this.proposals = new Map();
     this.agents = new Map();
     this.pendingEvents = new Map();
+    this.deliveries = new Map();
     this.hubs = new Set();
     this.polling = false;
   }
@@ -103,8 +104,8 @@ export class Controller {
         activeDeviceKey: a.active,
         devices: this.inventory(a.address),
       })),
-      pendingEvents: [...this.pendingEvents.values()],
-      proposals: [...this.proposals.values()],
+      pendingEvents: structuredClone([...this.pendingEvents.values()]),
+      proposals: structuredClone([...this.proposals.values()]),
     };
   }
   notify(type, a, d, extra = {}) {
@@ -113,23 +114,34 @@ export class Controller {
       type,
       agent: a.address,
       deviceKey: d.key,
-      ...extra,
+      ...structuredClone(extra),
     };
     if (this.pendingEvents.size >= 1000)
       throw new Error("Event delivery queue full");
     this.pendingEvents.set(event.id, event);
     this.changed();
     void this.deliver(event);
-    return event;
+    return structuredClone(event);
   }
-  async deliver(event) {
-    try {
-      await this.onEvent(event);
-      this.pendingEvents.delete(event.id);
-      this.changed();
-    } catch {
-      /* retry during poll */
-    }
+  deliver(event) {
+    const id = event.id;
+    if (this.deliveries.has(id)) return this.deliveries.get(id);
+    if (!this.pendingEvents.has(id)) return Promise.resolve();
+    // Reserve this ID before invoking application code, including callbacks
+    // that synchronously reenter the controller. Polling joins this attempt.
+    const delivery = Promise.resolve().then(async () => {
+      try {
+        await this.onEvent(structuredClone(event));
+        this.pendingEvents.delete(id);
+        this.changed();
+      } catch {
+        /* Keep the original event and ID for a later poll. */
+      } finally {
+        this.deliveries.delete(id);
+      }
+    });
+    this.deliveries.set(id, delivery);
+    return delivery;
   }
   invalidate(a, d, state = "revoked") {
     d.authorityGeneration = (d.authorityGeneration ?? 0) + 1;
