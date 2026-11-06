@@ -1,4 +1,8 @@
 import test from "node:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { ControllerState } from "../packages/sdk/controller-state.mjs";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { MediaManager, runCapture } from "../clients/linux/media.mjs";
@@ -32,6 +36,8 @@ async function setup(t) {
   };
   let stops = 0;
   const hardware = {
+    indicatorReady: () => true,
+    indicate: async () => {},
     mediaAvailable: () => true,
     captureMedia(kind, seconds, onData, onEnd) {
       const timer = setInterval(
@@ -83,7 +89,12 @@ test("signed live video and audio are consumed by fixed agent tools", async (t) 
     agent: s.peer.assignedAgent,
     devices: { macbook: { origin: s.origin, key: s.device.key } },
   };
+  const directory = mkdtempSync(join(tmpdir(), "adp-active-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const state = new ControllerState(directory);
+  state.jump(s.device.key);
   const deps = {
+    state,
     config: () => definition,
     self: () => s.controller,
     call,

@@ -35,6 +35,8 @@ test("real HTTP publisher, signed bridge, display and camera preview", async (t)
   const jpeg = Buffer.from([255, 216, 255, 217]);
   const hardware = {
     cameraReady: () => true,
+    indicatorReady: () => true,
+    indicate: async () => {},
     snapshot: async () => ({
       mime: "image/jpeg",
       data: jpeg.toString("base64"),

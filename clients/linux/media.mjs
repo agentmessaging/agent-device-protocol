@@ -156,7 +156,14 @@ export class MediaManager {
     this.sessions = new Map();
   }
   allowed(kind, peer) {
-    return peer?.media?.[kind] === true && this.hardware.mediaAvailable(kind);
+    return (
+      peer?.media?.[kind] === true &&
+      this.hardware.mediaAvailable(kind) &&
+      (kind === "speaker" ||
+        (this.hardware.indicatorReady?.() ??
+          this.display?.indicatorReady() ??
+          false))
+    );
   }
   advertised(peer) {
     return Object.keys(formats).filter((k) => this.allowed(k, peer));
@@ -204,17 +211,27 @@ export class MediaManager {
       if (!this.sameGrant(peer, kind)) finish("revoked");
     }, 100);
     deadline = setTimeout(() => finish("completed"), seconds * 1000 + 1000);
-    try {
-      stop =
-        kind === "speaker"
-          ? this.hardware.playPCM(data, (error) => finish(error || "completed"))
-          : this.hardware.captureMedia(kind, seconds, deliver, (error) =>
-              finish(error || "completed"),
-            );
-      if (done) stop();
-    } catch {
-      finish("hardware_unavailable");
-    }
+    const start = async () => {
+      try {
+        if (kind !== "speaker") {
+          if (this.hardware.indicate) await this.hardware.indicate(kind);
+          else await this.display.indicate(kind);
+        }
+        if (done) return;
+        stop =
+          kind === "speaker"
+            ? this.hardware.playPCM(data, (error) =>
+                finish(error || "completed"),
+              )
+            : this.hardware.captureMedia(kind, seconds, deliver, (error) =>
+                finish(error || "completed"),
+              );
+        if (done) stop();
+      } catch {
+        finish("hardware_unavailable");
+      }
+    };
+    void start();
     return () => finish("stopped");
   }
   stopAll() {

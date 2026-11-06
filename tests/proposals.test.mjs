@@ -94,3 +94,38 @@ test("rejected or superseded requests never reappear on retry", () => {
   policy = { ...policy, revision: "2" };
   assert.equal(pending.pending(), null);
 });
+
+test("stale expected revisions return conflicts and cannot queue a local approval", () => {
+  let peer = {
+      key: identity().key,
+      assignedAgent: "lola@host.local",
+      revision: "new",
+    },
+    storage;
+  const p = new Proposals(
+    () => peer,
+    () => storage,
+    (value) => {
+      storage = value;
+    },
+    () => {
+      peer = { ...peer, revision: "next" };
+    },
+  );
+  assert.equal(
+    p.request(nonce(), { action: "camera", enabled: true }, "old").status,
+    "revision_mismatch",
+  );
+  assert.equal(p.pending(), null);
+  const id = nonce();
+  assert.equal(
+    p.request(id, { action: "camera", enabled: true }, "new").status,
+    "awaiting_local_approval",
+  );
+  p.decide(id, true);
+  assert.equal(p.receipt().revision, "next");
+  assert.equal(
+    p.request(nonce(), { action: "revoke" }, "new").status,
+    "revision_mismatch",
+  );
+});

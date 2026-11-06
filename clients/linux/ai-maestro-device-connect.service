@@ -1,0 +1,15 @@
+[Unit]
+Description=AI Maestro outbound device bridge
+After=network-online.target
+
+[Service]
+Environment=ADP_NODE=/usr/bin/node
+EnvironmentFile=%h/.config/ai-maestro-device/service.env
+ExecStart=/usr/bin/env ${ADP_NODE} ${ADP_REPO}/clients/linux/cli.mjs connect ${ADP_CONTROLLER}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target

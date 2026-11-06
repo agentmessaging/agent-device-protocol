@@ -11,7 +11,7 @@ import subprocess
 import threading
 import time
 
-ALLOWED = {"device_list", "device_health", "device_snapshot", "device_camera_live",
+ALLOWED = {"device_show_text", "device_show_image", "device_say", "device_custom", "device_jump", "device_list", "device_health", "device_snapshot", "device_camera_live",
            "device_microphone", "device_speaker"}
 SLOTS = threading.BoundedSemaphore(4)
 

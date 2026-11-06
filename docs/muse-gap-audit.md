@@ -6,7 +6,7 @@ At the audited commit, the project was a prototype of signed device commands, a 
 
 ## Implementation follow-up
 
-The subsequent implementation adds MCP tools, a protected Linux signer, monitor notifications, signed media sessions and local consent/stop controls. Maestro and plugin integration ship as companion changes. See [agent-tools.md](agent-tools.md) for setup and exact boundaries, including separate Linux runtime UIDs and the need for physical hardware testing.
+The subsequent implementation adds MCP tools, a protected Linux signer, monitor notifications, signed media sessions and local consent/stop controls. The host-process Controller SDK now supports direct Maestro integration. Earlier Maestro and plugin PRs are on hold pending that integration. See [agent-tools.md](agent-tools.md) for setup and exact boundaries, including optional hardening and the need for physical hardware testing.
 
 ## Reported issues
 
@@ -14,16 +14,16 @@ The subsequent implementation adds MCP tools, a protected Linux signer, monitor 
 | --- | --- | --- |
 | [#1](https://github.com/23blocks-OS/ai-maestro-device-protocol/issues/1) | PiP displays one snapshot. Microphone/speaker profiles are disabled and streams are empty. | A consented media-session profile, authenticated bounded transport, capture/playback adapters and visible local stop controls. |
 | [#2](https://github.com/23blocks-OS/ai-maestro-device-protocol/issues/2) | The agent has no installed device tool or per-agent device inventory. | Fixed discover/health/snapshot tools installed into the assigned agent session, with configured runtime and media results that the agent can consume. |
-| [#3](https://github.com/23blocks-OS/ai-maestro-device-protocol/issues/3) | A shared OS user can read the private controller key. The AMP address is an operator-established association. | A host authorization boundary with independently protected agent credentials or isolated runtimes and an agent-bound signer. |
+| [#3](https://github.com/23blocks-OS/ai-maestro-device-protocol/issues/3) | A shared OS user can read the private controller key. The AMP address is an operator-established association. | Optional deployment hardening; the protocol does not require host-local isolation (see #16). |
 | [#4](https://github.com/23blocks-OS/ai-maestro-device-protocol/issues/4) | Maestro has no device inventory or management UI. | Registry, verified assignment, online/offline status, permission management and acknowledged transfer. Track integration under [Maestro #789](https://github.com/23blocks-OS/ai-maestro/issues/789). |
 | [#5](https://github.com/23blocks-OS/ai-maestro-device-protocol/issues/5) | Unit hardcodes Node, CLI setup output is confusing, and the runbook omits operational steps. | Fix the runtime path and CLI output, then document per-user runtime selection, pairing order, headless GitHub login, linger and a tailnet grant. |
 | [#6](https://github.com/23blocks-OS/ai-maestro-device-protocol/issues/6) | Announcements require a manual controller command. Offline detection and transfer notifications are absent. | A persistent controller-side inventory/liveness service with deduplicated notifications, restart recovery and retained previous-owner routing for transfers. |
 
 ### Authorization and deployment choice
 
-Possession or use of an agent's controller key grants that agent's authority. Isolation between agents on one host is a deployment choice, not a protocol requirement. AI Maestro's shared-user deployment is supported. Separate accounts and key brokers are optional hardening. Local grants, approval, stop controls and visible capture indicators remain device responsibilities. See [the controller contract](../protocol/controller.md).
+Updated by issue #16: possession or use of an agent's controller key grants that agent's authority. Isolation between agents on one host is a deployment choice, not a protocol requirement. AI Maestro's shared-user deployment is supported. Separate accounts and the reference UID broker remain optional hardening. Device-local grants, approval, stop controls and visible capture indicators apply in every deployment.
 
-## Comparison with Muse
+## Historical comparison at the audited commit
 
 | Area | Muse reference | Current Maestro implementation |
 | --- | --- | --- |

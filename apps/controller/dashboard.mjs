@@ -9,7 +9,8 @@ import {
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { exchange, nonce } from "@ai-maestro/device-sdk";
-import { validateChange } from "../../clients/linux/proposals.mjs";
+import { validateChange, sameChange } from "../../packages/sdk/changes.mjs";
+import { state } from "./registry.mjs";
 
 export function publishDashboard(snapshot) {
   const dir = process.env.ADP_DASHBOARD_DIR;
@@ -58,6 +59,20 @@ export async function processRequests(registry, identity, previous = {}) {
         const device = registry.devices[request.device];
         if (!device || device.key !== request.deviceKey) return;
         validateChange(request.change);
+        const receipt = state.read("proposal-results.json", {})[request.id];
+        if (
+          receipt &&
+          receipt.deviceKey === request.deviceKey &&
+          receipt.assignedAgent === request.agent &&
+          sameChange(receipt.change, request.change)
+        ) {
+          results[request.id] = {
+            status: receipt.status,
+            device: request.device,
+            change: request.change,
+          };
+          return;
+        }
         const response = await exchange(
           device.origin,
           identity,

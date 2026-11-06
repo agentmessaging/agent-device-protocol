@@ -5,12 +5,23 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./index.d.ts",
+      "types": "./index.d.mts",
       "default": "./index.mjs"
     },
     "./media": {
-      "types": "./media.d.ts",
+      "types": "./media.d.mts",
       "default": "./media.mjs"
+    },
+    "./controller": {
+      "types": "./controller.d.mts",
+      "default": "./controller.mjs"
+    },
+    "./reverse": {
+      "types": "./reverse.d.mts",
+      "default": "./reverse.mjs"
     }
+  },
+  "dependencies": {
+    "ws": "8.22.1"
   }
 }

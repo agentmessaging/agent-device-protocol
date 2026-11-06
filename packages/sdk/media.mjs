@@ -23,6 +23,10 @@ export async function* streamMedia(
     seconds > 60
   )
     throw new Error("Invalid media request");
+  if (typeof origin !== "string")
+    throw new Error(
+      "Live media over outbound connections is not supported by this profile; use snapshots",
+    );
   const base = privateOrigin(origin);
   const deadline = AbortSignal.timeout((seconds + 10) * 1000);
   const combined = signal ? AbortSignal.any([signal, deadline]) : deadline;

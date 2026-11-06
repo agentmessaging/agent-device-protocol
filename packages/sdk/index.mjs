@@ -113,12 +113,18 @@ export function publishActivity(
   assignedAgent,
   state,
   fetcher = fetch,
+  active,
 ) {
   return exchange(
     origin,
     self,
     device,
-    { type: "activity", assignedAgent: agentAddress(assignedAgent), state },
+    {
+      type: "activity",
+      assignedAgent: agentAddress(assignedAgent),
+      state,
+      ...(typeof active === "boolean" ? { active } : {}),
+    },
     "activity.ack",
     fetcher,
   );
@@ -129,17 +135,21 @@ export async function exchange(
   device,
   command,
   responseType,
-  fetcher,
+  fetcher = fetch,
 ) {
-  const base = privateOrigin(origin);
+  const base =
+    typeof origin === "string"
+      ? privateOrigin(origin)
+      : reverseOrigin(origin, device);
+  const prefix = typeof origin === "string" ? "/v1" : "";
   const options = { redirect: "error", signal: AbortSignal.timeout(15000) };
-  const hello = await fetcher(base + "/v1/challenge", options);
+  const hello = await fetcher(base + prefix + "/challenge", options);
   if (!hello.ok) throw new Error("Challenge failed: " + hello.status);
   const { challenge } = await limitedJson(hello, 1024);
   if (!/^[a-f0-9]{48}$/.test(challenge)) throw new Error("Invalid challenge");
   const id = nonce();
   const request = { id, challenge, to: device, ...command };
-  const res = await fetcher(base + "/v1/request", {
+  const res = await fetcher(base + prefix + "/request", {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -155,4 +165,15 @@ export async function exchange(
   )
     throw new Error("Uncorrelated response");
   return result;
+}
+
+export function reverseOrigin(value, device) {
+  publicKey(device);
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Object.keys(value).join() !== "reverse"
+  )
+    throw new Error("Invalid device endpoint");
+  return privateOrigin(value.reverse) + "/v1/devices/" + device;
 }

@@ -1,20 +1,22 @@
 # AI Maestro Device Protocol
 
-One locally assigned Maestro agent, identified by its AMP address and exclusive signing key, can discover a paired Linux computer and ask it for a health report or a camera snapshot. The agent runs on its usual host. The Linux machine runs a small device bridge as the desktop user. This is an experimental v1 protocol.
+Each device has one locally approved agent owner. An agent may own many devices and be active on at most one. A controller can serve all agents on a host in one process; AI Maestro implements that role directly. This experimental v1 includes signed device operations, outbound connections, user input, live HTTP media and a local display with approval and capture indicators.
 
 | Component | Implementation |
 | --- | --- |
-| [Device protocol](protocol/v1.md) | Signed registration, discovery, invocation and correlated results |
-| [Shared SDK](packages/sdk) | Ed25519 envelopes, typed controller API and bounded HTTP transport |
-| [Linux bridge](clients/linux) | Health, opt-in JPEG capture via V4L2, local permission changes |
-| [Controller](apps/controller) | Pair, discover, invoke, save JPEG, optionally announce capabilities to an AMP agent |
-| [Agent display](apps/display) | Kiosk orb and activity from Maestro, plus a local picture-in-picture mirror of camera snapshots |
+| [Device protocol](protocol/v1.md) | Signed registration, typed capabilities, local approvals and correlated results |
+| [Shared SDK](packages/sdk) | Host-wide multi-agent Controller SDK, HTTP and outbound WebSockets |
+| [Linux bridge](clients/linux) | Health, camera/audio, text/image/speech output and owner-installed custom capabilities |
+| [Controller](apps/controller) | Reference CLI/MCP controller, inventory, activation and optional AMP delivery |
+| [Agent display](apps/display) | Agent activity, PiP, text input, local grants, output and capture indicator |
 | Future clients | [macOS](clients/macos), [mobile](clients/mobile), [embedded](clients/embedded) |
 | Media | Live JPEG camera, microphone PCM/WAV and PCM speaker playback with separate local consent |
 
 ## Implementation status
 
-The Linux implementation includes fixed MCP agent tools, signed live camera/audio sessions, local media controls, a persistent status/AMP monitor and an optional protected Linux signer. [Install the agent tools and monitor](docs/agent-tools.md). The companion Maestro and plugin changes add the management view and agent skill. Physical camera/audio compatibility and the agent runtime's audio understanding still need verification on each target device. Other platform directories contain plans.
+Read [the controller contract](protocol/controller.md) and [server SDK guide](docs/controller-sdk.md) for direct AI Maestro integration. [The reference runbook](docs/agent-tools.md) supports standalone testing and optional hardening. Shared-user deployments are supported; the protocol does not require account isolation.
+
+AI Maestro #791 and plugin #99 are on hold while Maestro adopts the controller role directly. Physical MacBook camera/audio acceptance and the agent runtime's audio understanding still need target-device testing. Outbound connections currently carry snapshots, typed operations and text events; live media remains on the HTTP profile. Other platform directories contain plans.
 
 ## Run it
 

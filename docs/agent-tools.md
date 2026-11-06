@@ -1,6 +1,6 @@
 # Agent tools, live media and lifecycle
 
-The controller exposes six fixed MCP tools. It can run inside the assigned agent's isolated account, or use the protected Linux broker described below. The device bridge remains on the MacBook. Update both checkouts and restart the bridge before using media.
+The reference controller exposes eleven fixed MCP tools. AI Maestro can instead embed [the host-wide Controller SDK](controller-sdk.md) directly. It can run under the normal shared system user. Optional account isolation and the protected Linux broker are deployment choices. The device bridge remains on the MacBook. Update both checkouts and restart the bridge before using media.
 
 ## Configure the agent tools
 
@@ -19,14 +19,20 @@ Reopen Lola's Claude Code session in that workspace and approve the local MCP se
 
 | Tool | Result |
 | --- | --- |
-| device_list | Verified owned device inventory |
+| device_list | Verified owned device inventory and capability schemas |
+| device_jump | Select an owned device, or `none` |
 | device_health | Signed health report |
 | device_snapshot | JPEG image |
 | device_camera_live | Live PiP during a 1–30 second session, then the latest JPEG |
 | device_microphone | WAV audio from a 1–10 second session |
 | device_speaker | Plays supplied mono 16 kHz signed little-endian 16-bit PCM, up to 10 seconds |
+| device_show_text / device_show_image | Locally permitted plain text or bounded JPEG/PNG |
+| device_say | Locally permitted speech through espeak-ng |
+| device_custom | Only owner-installed custom operations and declared arguments |
 
-Camera snapshots retain the existing local camera grant. Live video, microphone and speaker have separate consent. On the MacBook's http://127.0.0.1:23111 screen, enable the desired media, then ask the agent to start a session. The screen indicates Camera live, Mic live or Speaker playing. Stop & revoke media closes active sessions and revokes their grants. Changing any media consent closes current sessions. Snapshot permission remains independently managed by the local assignment.
+Use `device_jump` or `node apps/controller/cli.mjs jump macbook` to select the device before sensors, media or output. Inventory and health remain available on idle devices. `list` works without a key or devices. Existing peer.json profiles migrate when a known URL is first discovered; registered devices are stored by key, with one atomic active selection.
+
+Keep the MacBook screen visible: camera and microphone are not advertised until a local indicator is available. Camera snapshots retain the existing local camera grant. Live video, microphone and speaker have separate consent. On the MacBook's http://127.0.0.1:23111 screen, enable the desired media, then ask the agent to start a session. The screen indicates Camera live, Mic live or Speaker playing. Stop & revoke media closes active sessions and revokes their grants. Changing any media consent closes current sessions. Snapshot permission remains independently managed by the local assignment.
 
 Linux media uses ffmpeg, V4L2 /dev/video0 and the desktop user's PulseAudio-compatible service (including pipewire-pulse). Ensure `ffmpeg` and `pipewire-pulse` are installed on Omarchy. An unavailable device or unsupported camera mode produces a tool error. The browser receives the frames actually emitted to the controller, with capture time. Microphone audio is transported as PCM and returned as WAV. Speech recognition and text-to-speech must be supplied by the agent runtime. Live sessions have bounded duration, frame size and buffers and stop on client disconnect, local revoke or ownership change.
 
@@ -38,15 +44,15 @@ For a persistent Linux controller service, copy apps/controller/ai-maestro-devic
 
 An offline transition requires three failed health polls. Probes are bounded and repeated; a successful poll resets the failure count. This is host-observed liveness. A powered-off device cannot send a notification itself.
 
-## Maestro dashboard connection
+## Optional reference dashboard adapter (on hold for AI Maestro)
 
-The companion Maestro change adds /agent-homes and /api/agent-homes in both full and headless modes. Set the same ADP_DASHBOARD_DIR on Maestro and the controller monitor. Its status subdirectory contains public device observations. Its requests subdirectory carries operator requests. Grant the monitor write access to status and read access to requests, and Maestro read access to status and write access to requests. Keep the parent directory controlled by the operator. It contains no private signing keys.
+The earlier companion Maestro change is on hold. AI Maestro will implement [the controller role](../protocol/controller.md) directly in its server, without this shared folder or a monitor per agent. For other reference integrations, the adapter adds /agent-homes and /api/agent-homes in both full and headless modes. Set the same ADP_DASHBOARD_DIR on Maestro and the controller monitor. Its status subdirectory contains public device observations. Its requests subdirectory carries operator requests. Grant the monitor write access to status and read access to requests, and Maestro read access to status and write access to requests. Keep the parent directory controlled by the operator. It contains no private signing keys.
 
 Transfer, camera and unassignment requests remain pending until someone approves on the physical device's display. A request expires after five minutes. The device persists the latest signed approval receipt, including after revocation, so the previous controller can confirm completion without retaining hardware access. A new controller needs its own device pairing and inventory configuration. Every accepted ownership transfer resets hardware grants.
 
-## Protected Linux signer for a shared host
+## Optional hardening: protected Linux signer
 
-The broker authorizes Linux user IDs through SO_PEERCRED. Run Lola in a dedicated OS runtime account. Other agents can share the host but must have different UIDs from Lola. An unrestricted process with Lola's UID has Lola's authority. This mechanism requires Linux; macOS controllers currently use an isolated account directly.
+The broker authorizes Linux user IDs through SO_PEERCRED. Run Lola in a dedicated OS runtime account. Other agents can share the host but must have different UIDs from Lola. An unrestricted process with Lola's UID has Lola's authority. This mechanism requires Linux; On macOS, separate accounts are also optional; plain shared-user operation remains supported.
 
 Deploy a root-owned, non-user-writable copy of this repository under /opt/ai-maestro-device, with npm workspace dependencies installed. The runtime, broker code and all imported code must have root-owned, non-writable ancestors. The broker checks these conditions on startup. Use a root-owned Node binary, such as /usr/bin/node. Keep each signing profile in a root-only directory under /var/lib/ai-maestro-device/<agent>.
 

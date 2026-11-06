@@ -1,6 +1,6 @@
 # Pair the Omarchy MacBook with Mini Lola
 
-The MacBook serves its local hardware. Mini Lola runs the controller alongside Maestro. Both hosts need an authenticated GitHub account with read access to this private repository. Use the same desktop user each time. Run the bridge without sudo.
+The MacBook serves its local hardware. AI Maestro implements the controller role for its agents. The commands below use the standalone reference controller to test a device before that direct integration is available. Both hosts need an authenticated GitHub account with read access to this private repository. Use the same desktop user each time. Run the bridge without sudo.
 
 ## 1. Install on the MacBook
 
@@ -57,7 +57,7 @@ node clients/linux/cli.mjs init
 tailscale ip -4
 ```
 
-On **Mini Lola**, use your normal controller account. Each agent has its own controller key and full AMP address. Programs that can use a key have that agent's authority; sharing a system user is an accepted deployment choice. Separate accounts and key brokers are optional deployment hardening, not protocol requirements.
+On **Mini Lola**, use your normal controller account. Each agent has its own controller key and full AMP address. Programs that can use a key have that agent's authority; sharing a system user is an accepted deployment choice. Optional account isolation and the reference broker are described in [agent-tools.md](agent-tools.md).
 
 From the controller environment:
 

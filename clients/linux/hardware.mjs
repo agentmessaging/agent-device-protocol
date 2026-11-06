@@ -11,7 +11,7 @@ export function cameraReady() {
     return false;
   }
 }
-export async function snapshot() {
+export async function snapshot(signal) {
   const { stdout } = await run(
     "/usr/bin/ffmpeg",
     [
@@ -33,6 +33,7 @@ export async function snapshot() {
       "pipe:1",
     ],
     {
+      signal,
       encoding: "buffer",
       timeout: 8000,
       killSignal: "SIGKILL",
