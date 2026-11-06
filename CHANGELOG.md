@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `speaker.play`: the device plays WAV audio the controller made, with its own grant, so an agent keeps one voice on every device.
 - The `agent-devices` skill and `adp-device.sh`, the agent's command.
 - Display: render only when the state changes, bound presence and control requests, and reload an idle kiosk after six hours while #20 is open.
 

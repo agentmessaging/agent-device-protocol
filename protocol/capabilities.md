@@ -11,6 +11,9 @@ Schemas use a bounded subset: a flat object, at most 16 properties, an explicit 
 | display.text | text, up to 4096 UTF-8 bytes | display.text | active |
 | display.image | mime (image/jpeg or image/png), standard base64 data, decoded maximum 256 KiB | display.image | active |
 | speaker.say | text, up to 500 UTF-8 bytes | speaker.say | active |
+| speaker.play | mime (audio/wav), standard base64 data, decoded maximum 384 KiB | speaker.play | active |
+
+`speaker.say` makes speech on the device, so its voice depends on the device. `speaker.play` plays audio the controller made, so an agent can sound the same on every device; send long speech as several calls, one per sentence. It has its own grant: allowing spoken text does not allow arbitrary audio. Audio must have the RIFF/WAVE signature; URLs and file paths are refused.
 
 Text is literal text, never HTML or markup. Images must have the declared PNG/JPEG signature; SVG, URLs and file paths are refused. Output grants default off. The display retains output for up to sixty seconds and clears it on assignment/grant revision changes. Speech uses the optional fixed Linux `/usr/bin/espeak-ng --stdin` adapter, with a ten-second bound; unsupported speech hardware is not advertised. Transfer resets all output and custom grants. A controller cannot install, change or remove a handler through this protocol.
 
