@@ -6,7 +6,7 @@
 | Date | 2026-11-06 |
 | Owner | Unassigned |
 | Work | [B001](../backlog/B001-kiosk-memory-growth.md) |
-| External report | [GitHub #20](https://github.com/23blocks-OS/ai-maestro-device-protocol/issues/20) |
+| External report | [GitHub #20](https://github.com/23blocks-OS/agent-device-protocol/issues/20) |
 | Evidence | [Issue snapshot](../raw/2026-11-06-issue-20.md), [static observations](../raw/2026-11-06-display-code-observations.md) |
 | Consumer | [S001 avatar renderer](S001-portable-agent-avatars.md) must satisfy these lifecycle requirements |
 

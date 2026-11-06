@@ -39,8 +39,8 @@ Follow the terminal's device-code prompt using a browser on your other computer.
 On **each** machine, from the location where you keep repositories:
 
 ```sh
-git clone https://github.com/23blocks-OS/ai-maestro-device-protocol.git
-cd ai-maestro-device-protocol
+git clone https://github.com/23blocks-OS/agent-device-protocol.git
+cd agent-device-protocol
 node --version
 npm ci --ignore-scripts
 npm test
@@ -194,7 +194,7 @@ Merge a specific grant into the existing policy in the Tailscale admin console. 
 {
   "grants": [
     {
-      "src": ["100.76.17.128/32"],
+      "src": ["100.64.0.1/32"],
       "dst": ["100.100.100.100/32"],
       "ip": ["tcp:23110"]
     }

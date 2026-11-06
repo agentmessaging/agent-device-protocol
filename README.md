@@ -1,6 +1,37 @@
-# AI Maestro Device Protocol
+# Agent Device Protocol (ADP)
 
-Each device has one locally approved agent owner. An agent may own many devices and be active on at most one. A controller can serve all agents on a host in one process; AI Maestro implements that role directly. This experimental v1 includes signed device operations, outbound connections, user input, live HTTP media and a local display with approval and capture indicators.
+**An open protocol for AI agents to own and use real devices.** A laptop, a camera, a screen in the kitchen: signed, approved on the device itself, and with no cloud in the middle.
+
+Status: **v1, experimental.** Companion to [AMP](https://agentmessaging.org) (messages), [AID](https://agentids.org) (identity), [AAP](https://agentactions.org) (UI actions) and [AFP](https://agentfiles.org) (files). Reference controller: [AI Maestro](https://aimaestro.sh).
+
+## The idea
+
+Agents live in terminals and servers. People live in rooms. ADP gives an agent a presence in the physical world without handing it the keys to your home.
+
+```
+agent:   "take a photo with the kitchen device"
+         the agent's controller signs the request and sends it straight to the device
+device:  checks the signature, the owner and the local grant, lights its in-use sign, captures, signs the result
+agent:   gets the picture
+```
+
+- **A device is optional.** An agent with no device is complete. Most agents have none.
+- **An agent can own many devices, and is active on at most one.** It jumps between them. It never sees through two cameras at once.
+- **A device has zero or one owner.** The device's signed answer is the truth, not anyone's records.
+- **The person at the device has the last word.** Camera, microphone and speaker are off until granted there. Ownership changes wait for approval there. A controller cannot turn off the in-use sign.
+- **No cloud, no relay.** Device and controller talk directly, signed end to end with Ed25519.
+- **Fixed operations only.** No remote shell, no arbitrary files, no remote code.
+
+## Roles
+
+| Role | What it does | Defined in |
+|---|---|---|
+| **Device** | Owns the hardware and the local grants. Answers signed requests | [protocol/v1.md](protocol/v1.md), [capabilities](protocol/capabilities.md) |
+| **Controller** | Acts for agents: keys, inventory, the active device, liveness. One process can serve many agents | [protocol/controller.md](protocol/controller.md) |
+
+Devices either answer on HTTP or open their own connection to the controller ([protocol/reverse.md](protocol/reverse.md)), which is how a device behind a home router or a phone reaches it.
+
+## Implementations
 
 | Component | Implementation |
 | --- | --- |
@@ -12,11 +43,16 @@ Each device has one locally approved agent owner. An agent may own many devices 
 | Future clients | [macOS](clients/macos), [mobile](clients/mobile), [embedded](clients/embedded) |
 | Media | Live JPEG camera, microphone PCM/WAV and PCM speaker playback with separate local consent |
 
-## Implementation status
+## Status
 
-Read [the controller contract](protocol/controller.md) and [server SDK guide](docs/controller-sdk.md) for direct AI Maestro integration. [The reference runbook](docs/agent-tools.md) supports standalone testing and optional hardening. Shared-user deployments are supported; the protocol does not require account isolation.
+- Controller role, SDK, Linux device bridge, typed capabilities, device-opened connections, local approvals and the conformance suite are in place.
+- [AI Maestro](https://github.com/23blocks-OS/ai-maestro) is implementing the controller role directly in its server, and passes the conformance suite.
+- Hardware acceptance on real camera and audio devices is in progress. Live media over device-opened connections is not done yet.
+- macOS, mobile and embedded devices are future work.
 
-AI Maestro #791 and plugin #99 are on hold while Maestro adopts the controller role directly. Physical MacBook camera/audio acceptance and the agent runtime's audio understanding still need target-device testing. Outbound connections currently carry snapshots, typed operations and text events; live media remains on the HTTP profile. Other platform directories contain plans.
+**A note on the name.** The protocol began inside AI Maestro, so the signature domain is still `ai-maestro-device/1` and the SDK package is `@ai-maestro/device-sdk`. The signature domain is part of the wire format: changing it would break every signature, so it stays for v1.
+
+Read [the controller contract](protocol/controller.md) and the [server SDK guide](docs/controller-sdk.md) to build a controller, and [the reference runbook](docs/agent-tools.md) to try it.
 
 ## Planning and repository knowledge
 
@@ -36,3 +72,7 @@ npm test
 ```
 
 The test suite starts a real loopback HTTP bridge. Camera and AMP delivery use test adapters. To exercise two actual CLI processes without a tailnet or camera, run `bash tests/smoke.sh`.
+
+## License
+
+[MIT](LICENSE)

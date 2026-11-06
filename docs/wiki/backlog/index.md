@@ -4,7 +4,7 @@ Updated: 2026-11-06. This is the repository's internal work list, not a claim of
 
 | ID | Priority | Status | Work | Depends on | External tracking |
 | --- | --- | --- | --- | --- | --- |
-| [B001](B001-kiosk-memory-growth.md) | P1 | Ready (investigation) | Diagnose and bound kiosk memory | Target-device profiling for final acceptance | [#20](https://github.com/23blocks-OS/ai-maestro-device-protocol/issues/20), open |
+| [B001](B001-kiosk-memory-growth.md) | P1 | Ready (investigation) | Diagnose and bound kiosk memory | Target-device profiling for final acceptance | [#20](https://github.com/23blocks-OS/agent-device-protocol/issues/20), open |
 | [F001](F001-avatar-package.md) | P2 | Proposed | Data-only avatar package and validation | S001 design acceptance | Internal record |
 | [F002](F002-avatar-state-handoff.md) | P2 | Proposed | Authenticated avatar state and handoff | F001 digest/schema contract | Internal record |
 | [F003](F003-browser-avatar-renderer.md) | P2 | Proposed | Browser renderer and Omarchy pilot | B001, F001, F002 | Internal record |
