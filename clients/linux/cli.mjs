@@ -79,12 +79,14 @@ else if (
   );
   const media = new MediaManager(peer, display);
   let connection;
+  // serve can also connect out, for device input: `connect` alone has no live media
+  const controllerOrigin = action === "connect" ? arg : process.env.ADP_CONTROLLER;
   const screen = displayServer(display, {
     setConsent: setMediaConsent,
     setOutputs: setOutputConsent,
     stopAll: () => media.stopAll(),
     proposals,
-    ...(action === "connect"
+    ...(controllerOrigin
       ? {
           used: () => connection.used(),
           input: (text) => connection.input(text),
@@ -107,14 +109,15 @@ else if (
   );
   server.listen(action === "connect" ? 0 : 23110, host);
   await once(server, "listening");
-  if (action === "connect") {
+  if (controllerOrigin) {
+    const local = action === "connect" ? "127.0.0.1" : host;
     connection = new DeviceConnection({
-      origin: arg,
+      origin: controllerOrigin,
       identity: self(),
       getPeer: peer,
       adapter: async (method, body, signal) => {
         const response = await fetch(
-          "http://127.0.0.1:" + server.address().port + "/v1/" + method,
+          "http://" + local + ":" + server.address().port + "/v1/" + method,
           {
             signal,
             method: method === "challenge" ? "GET" : "POST",
@@ -128,7 +131,11 @@ else if (
       console.log("Connected to assigned controller"),
     );
     connection.on("disconnected", () => console.log("Controller disconnected"));
-  } else console.log("Device listening on http://" + host + ":23110");
+    connection.on("stopped", (reason) =>
+      console.log("Stopped connecting to the controller: " + reason),
+    );
+  }
+  if (action !== "connect") console.log("Device listening on http://" + host + ":23110");
   const stop = async () => {
     media.stopAll();
     await connection?.stop();
