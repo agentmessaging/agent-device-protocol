@@ -19,6 +19,9 @@ export class DisplayState {
   indicatorReady() {
     return this.visible === true && this.now() - this.seenAt < 1000;
   }
+  keepIndicator(kind) {
+    this.indicators.set(kind, this.now() + 3000);
+  }
   async indicate(kind) {
     if (!this.indicatorReady())
       throw new Error("Visible local indicator unavailable");
@@ -137,6 +140,7 @@ export function displayServer(display, controls) {
         "/decision",
         "/used",
         "/input",
+        "/talk",
         "/outputs",
         "/presence",
       ].includes(req.url)
@@ -167,6 +171,13 @@ export function displayServer(display, controls) {
           if (Object.keys(input).join() !== "text")
             throw new Error("Invalid input");
           await controls.input(input.text);
+          return res.writeHead(204).end();
+        }
+        if (req.url === "/talk") {
+          const { action } = JSON.parse(body);
+          if (!["start", "stop"].includes(action) || !controls.talk)
+            return res.writeHead(400).end();
+          await controls.talk(action);
           return res.writeHead(204).end();
         }
         if (req.url === "/used") {
@@ -200,6 +211,7 @@ export function displayServer(display, controls) {
         ? {
             controlToken: token,
             canUse: typeof controls.used === "function",
+            canTalk: typeof controls.talk === "function",
             pending: controls.proposals?.pending() ?? null,
           }
         : {}),

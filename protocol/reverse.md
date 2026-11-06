@@ -46,6 +46,9 @@ The device signs one of these exact bodies:
 
 - `{type:"device.used",id,challenge,to:controllerKey,assignedAgent}`
 - `{type:"input",id,challenge,to:controllerKey,assignedAgent,text}`
+- `{type:"audio",id,challenge,to:controllerKey,assignedAgent,data}`
+
+`audio` is what a person said while holding a talk control: standard base64 WAV, decoded maximum 640 KiB (20 seconds of 16 kHz mono). It needs the microphone grant, shows the in-use sign while recording, and is sent only because the person chose to. A device never sends it unprompted. The controller acknowledges acceptance at once and turns it into text afterwards; the result is ordinary input, and carries no proof of who spoke.
 
 Text must contain 1–4096 UTF-8 bytes and non-whitespace content. There are at most four accepted events per second per connection; repeated use-only events are coalesced within one second. The controller derives the source device from the verified key and the recipient from verified ownership. It refreshes ownership before activating the device. Input or use from an idle owned device activates it immediately; this does not change any local hardware grant.
 
