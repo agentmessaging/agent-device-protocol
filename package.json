@@ -4,7 +4,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/23blocks-OS/agent-device-protocol.git"
+    "url": "git+https://github.com/agentmessaging/agent-device-protocol.git"
   },
   "private": true,
   "type": "module",

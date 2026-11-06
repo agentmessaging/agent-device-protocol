@@ -39,7 +39,7 @@ Follow the terminal's device-code prompt using a browser on your other computer.
 On **each** machine, from the location where you keep repositories:
 
 ```sh
-git clone https://github.com/23blocks-OS/agent-device-protocol.git
+git clone https://github.com/agentmessaging/agent-device-protocol.git
 cd agent-device-protocol
 node --version
 npm ci --ignore-scripts

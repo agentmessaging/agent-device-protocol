@@ -5,7 +5,7 @@
 | Type / priority | Bug / P1 |
 | Status | Ready for investigation; root cause unconfirmed |
 | Owner | Unassigned |
-| GitHub | [#20](https://github.com/23blocks-OS/agent-device-protocol/issues/20), open |
+| GitHub | [#20](https://github.com/agentmessaging/agent-device-protocol/issues/20), open |
 | Spec | [S002](../specs/S002-kiosk-memory-lifecycle.md) |
 | Source | [Reporter snapshot](../raw/2026-11-06-issue-20.md), [code observations](../raw/2026-11-06-display-code-observations.md) |
 | Dependencies | Target Omarchy access for final physical acceptance |
