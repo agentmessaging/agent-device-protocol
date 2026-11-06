@@ -116,29 +116,67 @@ img.onerror = () => {
   img.hidden = true;
   el("empty").textContent = "Frame unavailable";
 };
+// A kiosk runs for days. Nothing here may queue or repeat work without a bound (docs/wiki/specs/S002).
+const STATE_TIMEOUT_MS = 2000;
+const CONTROL_TIMEOUT_MS = 5000;
+// Safety net while issue #20 is open: a fresh page bounds what any leak can reach. Only when nothing is in use.
+const RELOAD_AFTER_MS = 6 * 60 * 60 * 1000;
+const loadedAt = Date.now();
+let lastState = null;
+let lastBody = null;
+let presencePending = false;
+function acknowledgePresence() {
+  if (presencePending) return;
+  presencePending = true;
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      control("/presence", {
+        visible: document.visibilityState === "visible",
+        indicatorId: lastIndicator,
+      })
+        .catch(() => {})
+        .finally(() => {
+          presencePending = false;
+        });
+    }),
+  );
+}
+function reloadIfIdle() {
+  if (
+    Date.now() - loadedAt > RELOAD_AFTER_MS &&
+    lastState &&
+    !lastState.live?.length &&
+    !lastState.indicators?.length &&
+    !lastState.pending &&
+    !el("input-text").value
+  )
+    location.reload();
+}
 async function poll() {
   try {
     const response = await fetch("/state", {
       cache: "no-store",
-      signal: AbortSignal.timeout(2000),
+      signal: AbortSignal.timeout(STATE_TIMEOUT_MS),
     });
     if (!response.ok) throw new Error();
-    render(await response.json());
-    if (controlToken && document.visibilityState === "visible") {
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          control("/presence", {
-            visible: document.visibilityState === "visible",
-            indicatorId: lastIndicator,
-          }).catch(() => {});
-        }),
+    const body = await response.text();
+    // Most polls change nothing: writing the same text still costs a layout, five times a second, all day
+    if (body !== lastBody) {
+      lastBody = body;
+      lastState = JSON.parse(body);
+      render(lastState);
+    }
+    if (controlToken && document.visibilityState === "visible")
+      acknowledgePresence();
+    reloadIfIdle();
+  } catch {
+    if (lastBody !== "offline") {
+      lastBody = "offline";
+      render(
+        { agent: null, state: "disconnected", camera: false, frameAt: null },
+        true,
       );
     }
-  } catch {
-    render(
-      { agent: null, state: "disconnected", camera: false, frameAt: null },
-      true,
-    );
   }
   setTimeout(poll, 200);
 }
@@ -152,6 +190,7 @@ async function control(path, body) {
       "X-Display-Token": controlToken,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error("Could not update media permission");
 }
