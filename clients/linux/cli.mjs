@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { CustomCapabilities } from "./custom.mjs";
 import { once } from "node:events";
 import { DeviceConnection, boundedJson } from "../../packages/sdk/reverse.mjs";
+import { PushToTalk } from "./talk.mjs";
 import {
   init,
   dir,
@@ -79,17 +80,26 @@ else if (
   );
   const media = new MediaManager(peer, display);
   let connection;
+  const talk = new PushToTalk({
+    getPeer: peer,
+    display,
+    send: (audio) => connection.audio(audio),
+  });
   // serve can also connect out, for device input: `connect` alone has no live media
   const controllerOrigin = action === "connect" ? arg : process.env.ADP_CONTROLLER;
   const screen = displayServer(display, {
     setConsent: setMediaConsent,
     setOutputs: setOutputConsent,
-    stopAll: () => media.stopAll(),
+    stopAll: () => {
+      talk.cancel();
+      media.stopAll();
+    },
     proposals,
     ...(controllerOrigin
       ? {
           used: () => connection.used(),
           input: (text) => connection.input(text),
+          talk: (action) => (action === "start" ? talk.start() : talk.stop()),
           afterDecision: (receipt) =>
             connection.finishProposal(receipt).catch(() => {}),
         }

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Hold to talk: a person holds a control on the device, and the recording reaches the controller as a signed `audio` event.
 - A jump to the device already active changes nothing. Before, a person typing at a device cancelled what the agent was doing there.
 - A controller says why it refused a device connection, and a device stops on a final refusal instead of retrying forever (#22).
 - `serve` can also connect out with `ADP_CONTROLLER`, so a device keeps live media and gains device input.

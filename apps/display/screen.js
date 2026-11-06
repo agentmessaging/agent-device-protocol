@@ -29,6 +29,7 @@ function render(
     pending,
     active,
     canUse,
+    canTalk,
     indicators = [],
     indicatorId,
   },
@@ -38,6 +39,7 @@ function render(
     active === true ? "Active device" : active === false ? "Idle device" : "";
   el("use-device").hidden = !canUse;
   el("device-input").hidden = !canUse;
+  el("talk").hidden = !canTalk || mediaConsent.microphone !== true;
   const sign = el("capture-indicator");
   sign.hidden = !indicators.length;
   sign.textContent = indicators
@@ -230,6 +232,33 @@ el("use-device").onclick = async () => {
   } catch (error) {
     el("media-status").textContent = error.message;
   }
+};
+
+// Hold to talk: a pointer or the space bar. Releasing anywhere ends it, so it cannot stay on.
+let talking = false;
+async function talk(action) {
+  if ((action === "start") === talking) return;
+  talking = action === "start";
+  el("talk").textContent = talking ? "Listening… release to send" : "Hold to talk";
+  try {
+    await control("/talk", { action });
+    if (!talking) el("input-status").textContent = "Sent to your agent";
+  } catch {
+    talking = false;
+    el("talk").textContent = "Hold to talk";
+    el("input-status").textContent =
+      "Could not use the microphone. Check that it is allowed.";
+  }
+}
+el("talk").onpointerdown = () => talk("start");
+window.addEventListener("pointerup", () => talk("stop"));
+window.addEventListener("pointercancel", () => talk("stop"));
+window.addEventListener("blur", () => talk("stop"));
+el("talk").onkeydown = (event) => {
+  if (event.code === "Space" && !event.repeat) talk("start");
+};
+el("talk").onkeyup = (event) => {
+  if (event.code === "Space") talk("stop");
 };
 
 el("device-input").onsubmit = async (event) => {
