@@ -1,3 +1,5 @@
-# macOS client (planned)
+# macOS client
 
-Use the shared v1 wire contract and pinning tests. A future native bridge must obtain macOS camera and microphone consent before advertising those capabilities. The Node controller already runs on macOS.
+The Linux bridge in `clients/linux` also runs on macOS: `clients/linux/platform.mjs` picks ffmpeg's `avfoundation` for the camera and microphone, `audiotoolbox` for sound and `say` for speech. Install ffmpeg with Homebrew.
+
+This is for your own Mac. macOS gives camera and microphone permission to the program that asks, so grant it by hand once, from a terminal. A background service may never show the prompt, so a client for other people needs a signed app.

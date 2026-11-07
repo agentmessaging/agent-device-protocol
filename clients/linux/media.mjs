@@ -1,27 +1,23 @@
 import { spawn } from "node:child_process";
-import { accessSync, constants } from "node:fs";
+import {
+  cameraInput,
+  cameraPresent,
+  ffmpegPath,
+  ffmpegReady,
+  microphoneInput,
+  speakerOutput,
+} from "./platform.mjs";
 
 import { mediaFormats as formats } from "../../packages/sdk/media.mjs";
 export { formats };
 export function mediaAvailable(kind) {
-  try {
-    accessSync("/usr/bin/ffmpeg", constants.X_OK);
-    if (kind === "video") accessSync("/dev/video0", constants.R_OK);
-    return true;
-  } catch {
-    return false;
-  }
+  return ffmpegReady() && (kind !== "video" || cameraPresent());
 }
 export function captureMedia(kind, seconds, onData, onEnd) {
   const input =
     kind === "video"
       ? [
-          "-f",
-          "video4linux2",
-          "-framerate",
-          "10",
-          "-i",
-          "/dev/video0",
+          ...cameraInput("10"),
           "-vf",
           "fps=5,scale=640:-2",
           "-c:v",
@@ -32,10 +28,7 @@ export function captureMedia(kind, seconds, onData, onEnd) {
           "image2pipe",
         ]
       : [
-          "-f",
-          "pulse",
-          "-i",
-          "default",
+          ...microphoneInput,
           "-ac",
           "1",
           "-ar",
@@ -65,12 +58,7 @@ export function previewCamera(onData, onEnd) {
       "-nostdin",
       "-loglevel",
       "error",
-      "-f",
-      "video4linux2",
-      "-framerate",
-      "10",
-      "-i",
-      "/dev/video0",
+      ...cameraInput("10"),
       "-vf",
       "fps=4,scale=640:-2",
       "-c:v",
@@ -91,7 +79,7 @@ export function runCapture(
   kind,
   onData,
   onEnd,
-  executable = "/usr/bin/ffmpeg",
+  executable = ffmpegPath,
 ) {
   const child = spawn(executable, args, {
     stdio: ["ignore", "pipe", "ignore"],
@@ -136,7 +124,7 @@ export function runCapture(
 }
 export function playPCM(data, onEnd) {
   const child = spawn(
-    "/usr/bin/ffmpeg",
+    ffmpegPath,
     [
       "-loglevel",
       "error",
@@ -148,9 +136,7 @@ export function playPCM(data, onEnd) {
       "1",
       "-i",
       "pipe:0",
-      "-f",
-      "pulse",
-      "default",
+      ...speakerOutput,
     ],
     { stdio: ["pipe", "ignore", "ignore"] },
   );
