@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The kiosk's icon column sits lower and tighter, clear of the person's wave.
 - The kiosk settings no longer call every agent "her" or "she".
 - Captions button on the kiosk: a small menu turns the agent's words and the person's words on or off, remembered on that screen.
 - The bridge runs on macOS for your own Mac: `clients/linux/platform.mjs` holds the hardware commands.
