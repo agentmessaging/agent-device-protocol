@@ -101,6 +101,11 @@ let last = {}; // the last state from the bridge
 let lastAgent;
 let who = "your agent";
 let problem = "Connecting";
+// A choice for this screen, not a permission: the words still arrive, they are only not shown
+const captions = {
+  agent: localStorage.captionsAgent !== "off",
+  you: localStorage.captionsYou !== "off",
+};
 let words = ""; // her words stay until the person starts again
 let listening = false; // the person is talking
 let thinkingUntil = 0;
@@ -130,7 +135,7 @@ function paint() {
   body.dataset.state = state;
   const { text, ...levels } = STATES[state];
   Object.assign(goal, levels);
-  const showWords = !problem && words && (state === "speaking" || state === "idle");
+  const showWords = captions.agent && !problem && words && (state === "speaking" || state === "idle");
   status.textContent = problem || (showWords ? words : text);
   status.classList.toggle("words-on", !!showWords);
   talkButton.setAttribute(
@@ -158,6 +163,7 @@ function displayName(agent) {
 function setName(name) {
   el("name").textContent = name || "Agent home";
   who = name || "your agent";
+  el("caption-agent").textContent = name || "Agent";
   el("type").setAttribute(
     "aria-label",
     body.classList.contains("typing-on") ? "Back to talking" : "Type to " + who,
@@ -236,7 +242,7 @@ function render(state, offline = false) {
   body.classList.toggle("no-talk", !state.canTalk);
   body.classList.toggle("no-input", !state.canUse);
   talkButton.disabled = switches.microphone !== true;
-  for (const sw of document.querySelectorAll(".sw"))
+  for (const sw of document.querySelectorAll(".sw[data-group]"))
     sw.setAttribute("aria-checked", String(switches[sw.dataset.group] === true));
   renderCamera(state);
 
@@ -252,7 +258,7 @@ function render(state, offline = false) {
   if (state.speaking) think(false);
   if (heard && heard.at !== seenHeard) {
     seenHeard = heard.at;
-    if (!listening) youWords.textContent = heard.text;
+    if (!listening && captions.you) youWords.textContent = heard.text;
   }
   if (output && output.at !== seenOutput) {
     seenOutput = output.at;
@@ -431,7 +437,7 @@ el("typing").onsubmit = async (event) => {
   if (!text) return;
   el("text").value = "";
   typing(false);
-  youWords.textContent = text;
+  youWords.textContent = captions.you ? text : "";
   words = "";
   think(true);
   paint();
@@ -454,7 +460,7 @@ async function grant(group, on) {
     el("settings-error").textContent = error.message;
   }
 }
-for (const sw of document.querySelectorAll(".sw"))
+for (const sw of document.querySelectorAll(".sw[data-group]"))
   sw.onclick = () => grant(sw.dataset.group, sw.getAttribute("aria-checked") !== "true");
 el("cam").onclick = () => grant("camera", body.classList.contains("cam-off"));
 el("stop").onclick = async () => {
@@ -474,10 +480,41 @@ function settings(on) {
   aside.inert = !on;
   (on ? el("close") : gear).focus();
 }
+const ccButton = el("cc"),
+  ccMenu = el("captions");
+function captionMenu(on) {
+  ccMenu.hidden = !on;
+  ccButton.setAttribute("aria-expanded", String(on));
+}
+function paintCaptions() {
+  for (const sw of ccMenu.querySelectorAll(".sw"))
+    sw.setAttribute("aria-checked", String(captions[sw.dataset.caption]));
+  ccButton.classList.toggle("off", !captions.agent && !captions.you);
+}
+for (const sw of ccMenu.querySelectorAll(".sw"))
+  sw.onclick = () => {
+    const side = sw.dataset.caption;
+    captions[side] = !captions[side];
+    localStorage[side === "agent" ? "captionsAgent" : "captionsYou"] = captions[side] ? "on" : "off";
+    if (!captions.you) youWords.textContent = "";
+    paintCaptions();
+    paint();
+  };
+ccButton.onclick = (event) => {
+  event.stopPropagation();
+  captionMenu(ccMenu.hidden);
+};
+addEventListener("click", (event) => {
+  if (!ccMenu.contains(event.target)) captionMenu(false);
+});
+paintCaptions();
 gear.onclick = () => settings(true);
 el("close").onclick = () => settings(false);
 addEventListener("keydown", (event) => {
-  if (event.key === "Escape") settings(false);
+  if (event.key === "Escape") {
+    settings(false);
+    captionMenu(false);
+  }
 });
 
 for (const [id, approve] of [
