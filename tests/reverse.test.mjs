@@ -413,3 +413,49 @@ test("disconnect during capture cancels the result and reconnect never repeats t
   );
   assert.equal(captures, 1);
 });
+
+test("transcribe is told whose clip it is", async (t) => {
+  const { Controller } = await import("../packages/sdk/controller.mjs");
+  const seen = [];
+  const c = new Controller({ onEvent: () => {} }),
+    owner = identity();
+  c.addAgent({ address: "lola@host.local", identity: owner });
+  const hub = c.createHub({ transcribe: (audio, context) => { seen.push(context); return "hello"; } });
+  hub.server.listen(0, "127.0.0.1");
+  await once(hub.server, "listening");
+  const origin = "http://127.0.0.1:" + hub.server.address().port;
+  const device = identity(),
+    peer = { key: owner.key, assignedAgent: "lola@host.local" },
+    server = bridge(device, () => peer);
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  c.pinDevice("lola@host.local", { key: device.key, endpoint: { reverse: origin }, name: "kitchen" });
+  const connection = new DeviceConnection({
+    origin,
+    identity: device,
+    getPeer: () => peer,
+    adapter: async (method, body, signal) => {
+      const res = await fetch("http://127.0.0.1:" + server.address().port + "/v1/" + method, {
+        signal,
+        method: method === "challenge" ? "GET" : "POST",
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      return { status: res.status, body: await boundedJson(res) };
+    },
+  });
+  t.after(async () => {
+    await connection.stop();
+    await c.stop();
+    server.close();
+    server.closeAllConnections();
+  });
+  await connection.ready;
+  await waitFor(() => c.inventory("lola@host.local").every((d) => d.verified));
+  const wav = Buffer.alloc(64);
+  wav.write("RIFF", 0, "latin1");
+  wav.write("WAVE", 8, "latin1");
+  await waitFor(() => connection.eventChallenge);
+  await connection.audio(wav);
+  await waitFor(() => seen.length);
+  assert.deepEqual(seen[0], { agent: "lola@host.local", device: device.key });
+});

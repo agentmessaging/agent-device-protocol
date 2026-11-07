@@ -61,7 +61,7 @@ export class DisplayState {
       peer && JSON.stringify([peer.key, peer.assignedAgent, peer.revision]);
     if (owner !== this.owner) {
       this.owner = owner;
-      this.activity = this.frame = this.output = this.label = undefined;
+      this.activity = this.frame = this.output = this.label = this.hearing = undefined;
       this.heard = this.picture = undefined;
       this.order = 0;
       this.live.clear();
@@ -72,12 +72,14 @@ export class DisplayState {
     )
       this.frame = undefined;
   }
-  update(peer, state, order, active, label) {
+  update(peer, state, order, active, label, hearing) {
     this.sync(peer);
     if (order <= this.order) return false;
     this.order = order;
     this.activity = { state, active, at: this.now() };
     if (label) this.label = label;
+    // Sent with every update, so an agent back on local hearing clears it
+    this.hearing = hearing || undefined;
     return true;
   }
   capture(peer, value) {
@@ -123,6 +125,7 @@ export class DisplayState {
     return {
       agent: peer?.assignedAgent ?? null,
       label: this.label ?? null,
+      hearing: this.hearing ?? null,
       state: fresh ? this.activity.state : "disconnected",
       active: fresh ? (this.activity.active ?? null) : null,
       camera: peer?.camera === true,
