@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The kiosk settings no longer call every agent "her" or "she".
+- Captions button on the kiosk: a small menu turns the agent's words and the person's words on or off, remembered on that screen.
 - The bridge runs on macOS for your own Mac: `clients/linux/platform.mjs` holds the hardware commands.
 - An activity update can carry `label`, the agent's display name, so a device shows "Lola" and not `pas-lola`.
 - New kiosk page: the agent's voice and words above, the person's picture, voice and words below, with Outfit served from the device. Tap to talk, typing, four grant switches and real voice levels (`/levels`). `Use this device` is gone: talking or typing counts.

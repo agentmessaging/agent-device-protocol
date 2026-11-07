@@ -27,11 +27,18 @@
 </div>
 <div class="tools">
   <button id="type" class="round tool" title="Type"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10.5 10h.01M14.5 10h.01M17.5 10h.01M8 14h8"/></svg></button>
+  <button id="cc" class="round tool" aria-label="Captions" aria-expanded="false" aria-controls="captions" title="Captions">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10.5 10.2a2.2 2.2 0 1 0 0 3.6M17.5 10.2a2.2 2.2 0 1 0 0 3.6"/></svg>
+  </button>
   <button id="cam" class="round tool" aria-label="Turn the camera off" aria-pressed="false" title="Camera">
     <svg class="on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6.5" width="13" height="11" rx="2"/><path d="M15.5 11l6-3.5v9l-6-3.5"/></svg>
     <svg class="off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6.5" width="13" height="11" rx="2"/><path d="M15.5 11l6-3.5v9l-6-3.5M3 3l18 18"/></svg>
   </button>
   <button id="gear" class="round tool" aria-label="Settings" aria-expanded="false">⚙</button>
+</div>
+<div id="captions" role="group" aria-label="Captions" hidden>
+  <div class="row"><span id="caption-agent">Agent</span><button class="sw" role="switch" data-caption="agent" aria-checked="true" aria-labelledby="caption-agent"></button></div>
+  <div class="row"><span id="caption-you">You</span><button class="sw" role="switch" data-caption="you" aria-checked="true" aria-labelledby="caption-you"></button></div>
 </div>
 <form class="typing" id="typing">
   <textarea id="text" maxlength="4096"></textarea>
@@ -43,8 +50,8 @@
   <h2 id="settings-title">What your agent can use</h2>
   <div class="row"><span>Camera</span><button class="sw" role="switch" data-group="camera" aria-checked="false" aria-label="Camera"></button></div>
   <div class="row"><span>Microphone</span><button class="sw" role="switch" data-group="microphone" aria-checked="false" aria-label="Microphone"></button></div>
-  <div class="row"><span>Speaker<small>Her voice and sounds</small></span><button class="sw" role="switch" data-group="speaker" aria-checked="false" aria-label="Speaker"></button></div>
-  <div class="row"><span>Screen<small>Text and pictures she sends</small></span><button class="sw" role="switch" data-group="screen" aria-checked="false" aria-label="Screen"></button></div>
+  <div class="row"><span>Speaker<small>Voice and sounds</small></span><button class="sw" role="switch" data-group="speaker" aria-checked="false" aria-label="Speaker"></button></div>
+  <div class="row"><span>Screen<small>Text and pictures</small></span><button class="sw" role="switch" data-group="screen" aria-checked="false" aria-label="Screen"></button></div>
   <p id="settings-error" role="status"></p>
   <button id="stop">Stop everything now</button>
 </aside>

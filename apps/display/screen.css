@@ -35,6 +35,10 @@ body[data-state=listening] #talk{background:var(--you);box-shadow:0 0 0 12px rgb
 .tools{position:fixed;left:48px;bottom:30px;display:flex;flex-direction:column;gap:10px;z-index:2}
 .tool{width:46px;height:46px;background:rgba(23,34,52,.86);border:1px solid var(--line);color:var(--text)}
 .tool:hover{border-color:var(--muted)}
+#cc.off{color:var(--muted)}
+#captions{position:fixed;left:106px;bottom:30px;width:230px;padding:6px 16px;background:var(--ink2);border:1px solid var(--line);border-radius:14px;z-index:3}
+#captions .row:last-child{border-bottom:0}
+#captions span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:12px}
 #cam .off{display:none}
 body.typing-on #type{background:var(--agent);border-color:var(--agent);color:#07121f}
 body.cam-off #cam{background:var(--stop);border-color:var(--stop);color:#2a0f12}
