@@ -233,6 +233,10 @@ function render(state, offline = false) {
   }
   // The label comes with the first activity update, a moment after the address
   const name = state.label || displayName(agent);
+  // Where the person's voice goes, when it leaves this network
+  const hearing = el("hearing");
+  hearing.hidden = !state.hearing;
+  hearing.textContent = state.hearing ? "What you say is heard by " + state.hearing : "";
   if (name !== shownName && !offline) {
     shownName = name;
     setName(name);

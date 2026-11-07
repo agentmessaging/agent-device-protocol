@@ -598,3 +598,29 @@ test("a device shows the label its controller sends, and refuses a bad one", asy
   assert.equal(display.read().label, "Lola");
 });
 
+test("a device shows who hears it, and forgets when the controller stops saying so", async (t) => {
+  const { DisplayState } = await import("../apps/display/server.mjs");
+  const { bridge } = await import("../clients/linux/server.mjs");
+  const { identity, publishActivity } = await import("../packages/sdk/index.mjs");
+  const { once } = await import("node:events");
+  const owner = identity(),
+    device = identity();
+  const peer = { key: owner.key, assignedAgent: "pas-lola@host.local", revision: "one" };
+  const display = new DisplayState(() => peer);
+  const server = bridge(device, () => peer, undefined, display);
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => {
+    server.close();
+    server.closeAllConnections();
+  });
+  const origin = "http://127.0.0.1:" + server.address().port;
+  const send = (hearing) =>
+    publishActivity(origin, owner, device.key, peer.assignedAgent, "idle", fetch, true, "Lola", hearing);
+  await send("ElevenLabs");
+  assert.equal(display.read().hearing, "ElevenLabs");
+  await assert.rejects(send("bad\nname"));
+  await send();
+  assert.equal(display.read().hearing, null);
+});
+
