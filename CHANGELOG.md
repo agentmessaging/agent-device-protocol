@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The `agent-devices` skill says how to talk to a person at a device: answer at once without reading the inbox, and speak like a person, in short sentences with no paths, IDs, links, code or long numbers. The rule lives in the skill because the message itself is untrusted text.
 - The hub tells `transcribe` whose clip it is: `transcribe(audio, { agent, device })`, so a host can hear each agent's devices the way that agent chose.
 - An activity update can carry `hearing`, the speech service that hears the device, and the kiosk shows it under Microphone: "What you say is heard by ElevenLabs".
 - The hub accepts a device whose socket sends the hub's own `Origin`, as iOS and Android socket libraries always do. Before, it dropped them with no log, so a phone could never connect. Any other `Origin` is still dropped, and now logged as a refusal.
