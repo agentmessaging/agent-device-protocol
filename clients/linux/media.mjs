@@ -58,6 +58,34 @@ export function captureMedia(kind, seconds, onData, onEnd) {
     onEnd,
   );
 }
+/** The local preview: same device and format as a video session, at a lower rate, with no end time. */
+export function previewCamera(onData, onEnd) {
+  return runCapture(
+    [
+      "-nostdin",
+      "-loglevel",
+      "error",
+      "-f",
+      "video4linux2",
+      "-framerate",
+      "10",
+      "-i",
+      "/dev/video0",
+      "-vf",
+      "fps=4,scale=640:-2",
+      "-c:v",
+      "mjpeg",
+      "-q:v",
+      "7",
+      "-f",
+      "image2pipe",
+      "pipe:1",
+    ],
+    "video",
+    onData,
+    onEnd,
+  );
+}
 export function runCapture(
   args,
   kind,
@@ -188,6 +216,9 @@ export class MediaManager {
       done = false,
       timer,
       deadline;
+    // /dev/video0 is exclusive: the local preview lets go before a session opens it
+    const video = kind === "video";
+    const released = video ? this.hardware.pauseCamera?.() : undefined;
     const finish = (reason) => {
       if (done) return;
       done = true;
@@ -195,6 +226,7 @@ export class MediaManager {
       clearTimeout(deadline);
       this.sessions.delete(kind);
       stop();
+      if (video) this.hardware.resumeCamera?.();
       this.display?.mediaStopped(kind);
       onEnd(reason);
     };
@@ -217,6 +249,7 @@ export class MediaManager {
           if (this.hardware.indicate) await this.hardware.indicate(kind);
           else await this.display.indicate(kind);
         }
+        await released;
         if (done) return;
         stop =
           kind === "speaker"

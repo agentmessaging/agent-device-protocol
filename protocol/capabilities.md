@@ -15,7 +15,11 @@ Schemas use a bounded subset: a flat object, at most 16 properties, an explicit 
 
 `speaker.say` makes speech on the device, so its voice depends on the device. `speaker.play` plays audio the controller made, so an agent can sound the same on every device; send long speech as several calls, one per sentence. It has its own grant: allowing spoken text does not allow arbitrary audio. Audio must have the RIFF/WAVE signature; URLs and file paths are refused.
 
-Text is literal text, never HTML or markup. Images must have the declared PNG/JPEG signature; SVG, URLs and file paths are refused. Output grants default off. The display retains output for up to sixty seconds and clears it on assignment/grant revision changes. Speech uses the optional fixed Linux `/usr/bin/espeak-ng --stdin` adapter, with a ten-second bound; unsupported speech hardware is not advertised. Transfer resets all output and custom grants. A controller cannot install, change or remove a handler through this protocol.
+Text is literal text, never HTML or markup. Images must have the declared PNG/JPEG signature; SVG, URLs and file paths are refused. Output grants default off. The display retains output for up to sixty seconds and clears it on assignment/grant revision changes. The reference screen keeps the agent's last words on its line after that, until the person starts again or the Screen grant goes off. Speech uses the optional fixed Linux `/usr/bin/espeak-ng --stdin` adapter, with a ten-second bound; unsupported speech hardware is not advertised. Transfer resets all output and custom grants. A controller cannot install, change or remove a handler through this protocol.
+
+While a person is talking at the device, `speaker.play` and `speaker.say` succeed with `{played:false}` and play nothing, and audio already playing stops with the same result. The microphone must not pick up the agent.
+
+The reference screen shows `display.text` that starts with exactly `You said: ` as what the person said, without the prefix, and all other text as the agent's words. This is a convention of that screen, not a typed field.
 
 ## Owner-defined capabilities
 
@@ -31,4 +35,8 @@ A device with a camera or microphone MUST show a device-driven sign visible to p
 
 For snapshots, the sign MUST appear before capture and remain for at least three seconds after its display acknowledgment. Streaming indication lasts throughout capture, with at least the same initial minimum. Local grants and the local stop control remain authoritative regardless of controller deployment or active-device state.
 
+The local stop covers every grant: `camera`, `video`, `microphone`, `speaker`, all four outputs and every custom grant go off in one write, and everything running stops. After it, `camera.snapshot` is denied like any capture. The screen's Camera switch controls `camera` and `video` together, so a person who turns the camera off also stops still pictures.
+
 The Linux screen sends same-origin, token-protected visibility/paint acknowledgments. The bridge waits for the rendered sign before starting capture. The browser must be visible and continue acknowledging; a hidden, closed or unresponsive screen removes capture availability and cancels capture within approximately 1.1 seconds (one-second freshness bound plus a 100 ms check). The camera's own hardware light is used naturally where the driver powers it, but the reference bridge does not assume an undetectable light is working. Keep the screen open and visible when testing camera or microphone.
+
+The Linux screen also shows the person their own picture: a low-rate local preview served on loopback only. It never goes to a controller or an agent and is not a capture for them; the picture itself and its label are its sign. It runs only while the Camera switch is on and the screen is visible and acknowledging, on the same freshness bound as above, and it gives up the camera before a snapshot or a video session opens it. `ADP_PREVIEW=off` turns it off and leaves snapshots working.

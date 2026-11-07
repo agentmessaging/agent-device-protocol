@@ -21,6 +21,7 @@ Updated: 2026-11-06. Proposed work below is **not implemented** by these documen
 - [F002 — Avatar state and handoff](backlog/F002-avatar-state-handoff.md): P2, proposed.
 - [F003 — Browser avatar renderer](backlog/F003-browser-avatar-renderer.md): P2, proposed; depends on B001, F001 and F002.
 - [F004 — Additional display platforms](backlog/F004-platform-renderers.md): P3, proposed; later per-platform work.
+- [F005 — Kiosk redesign](backlog/F005-kiosk-redesign.md): P2, in progress; built and simulated, physical acceptance pending.
 
 ## Sources
 

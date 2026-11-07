@@ -12,31 +12,11 @@ const peer = {
   assignedAgent: "Lola@mini.local",
   key: "test",
   camera: true,
-  media: { video: true },
+  media: { video: true, microphone: true },
 };
 const display = new DisplayState(() => peer);
 display.update(peer, "waiting", 1);
-const picture = await promisify(execFile)(
-  "/usr/bin/ffmpeg",
-  [
-    "-loglevel",
-    "error",
-    "-f",
-    "lavfi",
-    "-i",
-    "testsrc2=size=640x360",
-    "-frames:v",
-    "1",
-    "-f",
-    "image2pipe",
-    "-c:v",
-    "mjpeg",
-    "pipe:1",
-  ],
-  { encoding: "buffer" },
-);
 display.mediaStarted(peer, "video");
-display.capture(peer, { data: picture.stdout.toString("base64") });
 const server = displayServer(display, {
   setConsent: () => {},
   stopAll: () => {},
@@ -63,14 +43,14 @@ try {
     { timeout: 30000 },
   );
   assert.match(stdout, /<h1 id="name">Lola<\/h1>/);
-  assert.match(stdout, /<span id="status">Waiting for you<\/span>/);
-  assert.match(
-    stdout,
-    /<span id="media-status" role="status">Camera live<\/span>/,
-  );
-  assert.match(stdout, /<div id="consent">/);
-  assert.match(stdout, /<img[^>]*id="frame"[^>]*src="\/frame\/[^>]*>/);
-  assert.doesNotMatch(stdout, /<img[^>]*id="frame"[^>]*hidden/);
+  assert.match(stdout, /<p id="status" role="status">Here with you<\/p>/);
+  assert.match(stdout, /<p id="eye-note">Lola is looking<\/p>/);
+  assert.match(stdout, /<div id="capture-indicator" role="status">Camera in use<\/div>/);
+  assert.match(stdout, /<h2 id="settings-title">What Lola can use<\/h2>/);
+  assert.match(stdout, /data-group="camera" aria-checked="true"/);
+  assert.match(stdout, /data-group="screen" aria-checked="false"/);
+  assert.match(stdout, /<button id="talk"[^>]*aria-label="Talk to Lola"/);
+  assert.doesNotMatch(stdout, /class="demo"/);
 } finally {
   server.close();
   server.closeAllConnections();

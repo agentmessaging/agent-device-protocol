@@ -41,7 +41,7 @@ Devices either answer on HTTP or open their own connection to the controller ([p
 | [Shared SDK](packages/sdk) | Host-wide multi-agent Controller SDK, HTTP and outbound WebSockets |
 | [Linux bridge](clients/linux) | Health, camera/audio, text/image/speech output and owner-installed custom capabilities |
 | [Controller](apps/controller) | Reference CLI/MCP controller, inventory, activation and optional AMP delivery |
-| [Agent display](apps/display) | Agent activity, PiP, text input, local grants, output and capture indicator |
+| [Agent display](apps/display) | The device's kiosk: talk and typing, real voice levels, local preview, four grant switches, output and capture indicator |
 | Future clients | [macOS](clients/macos), [mobile](clients/mobile), [embedded](clients/embedded) |
 | Media | Live JPEG camera, microphone PCM/WAV and PCM speaker playback with separate local consent |
 

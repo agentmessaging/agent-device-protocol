@@ -2,6 +2,27 @@ import http from "node:http";
 import { readFileSync } from "node:fs";
 import { agentAddress, nonce } from "@ai-maestro/device-sdk";
 
+// What each settings switch controls. A switch reads on only if all of its grants are on.
+export const GROUPS = {
+  camera: { consent: ["camera", "video"] },
+  microphone: { consent: ["microphone"] },
+  speaker: { consent: ["speaker"], outputs: ["speaker.say", "speaker.play"] },
+  screen: { outputs: ["display.text", "display.image"] },
+};
+export function groupOn(peer, group) {
+  const { consent = [], outputs = [] } = GROUPS[group];
+  return (
+    consent.every(
+      (k) => (k === "camera" ? peer?.camera : peer?.media?.[k]) === true,
+    ) && outputs.every((k) => peer?.outputs?.[k] === true)
+  );
+}
+const grants = (names = [], on) =>
+  Object.fromEntries(names.map((name) => [name, on]));
+
+// shortcut: the host marks a transcript by this prefix on display.text; a typed field in the capability would be cleaner
+const YOU_SAID = "You said: ";
+
 export class DisplayState {
   constructor(getPeer, now = Date.now) {
     this.getPeer = getPeer;
@@ -41,6 +62,7 @@ export class DisplayState {
     if (owner !== this.owner) {
       this.owner = owner;
       this.activity = this.frame = this.output = undefined;
+      this.heard = this.picture = undefined;
       this.order = 0;
       this.live.clear();
     }
@@ -63,7 +85,21 @@ export class DisplayState {
   }
   show(peer, value) {
     this.sync(peer);
-    this.output = { ...value, at: this.now() };
+    const at = this.now();
+    // Each has its own slot: the page reads five times a second and must not miss one behind another
+    if (value.data) this.picture = { ...value, at };
+    else if (value.text.startsWith(YOU_SAID))
+      this.heard = { text: value.text.slice(YOU_SAID.length), at };
+    else this.output = { ...value, at };
+  }
+  fresh(shown) {
+    return shown && this.now() - shown.at < 60000 ? shown : null;
+  }
+  levels() {
+    return {
+      you: this.talking === true ? (this.you ?? 0) : 0,
+      agent: this.voice?.level() ?? 0,
+    };
   }
   mediaStarted(peer, kind) {
     this.sync(peer);
@@ -90,8 +126,14 @@ export class DisplayState {
       camera: peer?.camera === true,
       mediaConsent: peer?.media ?? {},
       outputConsent: peer?.outputs ?? {},
-      output:
-        this.output && this.now() - this.output.at < 60000 ? this.output : null,
+      switches: Object.fromEntries(
+        Object.keys(GROUPS).map((group) => [group, groupOn(peer, group)]),
+      ),
+      output: this.fresh(this.output),
+      heard: this.fresh(this.heard),
+      picture: this.fresh(this.picture) && { at: this.picture.at },
+      speaking: this.voice?.speaking() ?? false,
+      talking: this.talking === true,
       live: [...this.live],
       indicators: [
         ...new Set(
@@ -114,11 +156,13 @@ const assets = new Map(
     ["/", ["index.html", "text/html; charset=utf-8"]],
     ["/screen.css", ["screen.css", "text/css"]],
     ["/screen.js", ["screen.js", "text/javascript"]],
+    ["/outfit.woff2", ["outfit.woff2", "font/woff2"]],
   ].map(([url, [name, type]]) => [
     url,
     { type, body: readFileSync(new URL(name, import.meta.url)) },
   ]),
 );
+const LOOPBACK = ["127.0.0.1", "::ffff:127.0.0.1"];
 export function displayServer(display, controls) {
   const token = nonce();
   return http.createServer(async (req, res) => {
@@ -134,16 +178,9 @@ export function displayServer(display, controls) {
     if (
       req.method === "POST" &&
       controls &&
-      [
-        "/consent",
-        "/stop",
-        "/decision",
-        "/used",
-        "/input",
-        "/talk",
-        "/outputs",
-        "/presence",
-      ].includes(req.url)
+      ["/grant", "/stop", "/decision", "/input", "/talk", "/presence"].includes(
+        req.url,
+      )
     ) {
       if (
         req.headers.origin !== "http://" + req.headers.host ||
@@ -162,10 +199,6 @@ export function displayServer(display, controls) {
           display.ackPresence(p.visible, p.indicatorId);
           return res.writeHead(204).end();
         }
-        if (req.url === "/outputs") {
-          controls.setOutputs(JSON.parse(body));
-          return res.writeHead(204).end();
-        }
         if (req.url === "/input") {
           const input = JSON.parse(body);
           if (Object.keys(input).join() !== "text")
@@ -177,12 +210,10 @@ export function displayServer(display, controls) {
           const { action } = JSON.parse(body);
           if (!["start", "stop"].includes(action) || !controls.talk)
             return res.writeHead(400).end();
-          await controls.talk(action);
-          return res.writeHead(204).end();
-        }
-        if (req.url === "/used") {
-          await controls.used();
-          return res.writeHead(204).end();
+          const sent = (await controls.talk(action)) === true;
+          return res
+            .writeHead(200, { "Content-Type": "application/json" })
+            .end(JSON.stringify({ sent }));
         }
         if (req.url === "/decision") {
           const decision = JSON.parse(body);
@@ -193,25 +224,46 @@ export function displayServer(display, controls) {
           await controls.afterDecision?.(controls.proposals.receipt());
           return res.writeHead(204).end();
         }
-        const consent =
-          req.url === "/stop"
-            ? { video: false, microphone: false, speaker: false }
-            : JSON.parse(body);
-        controls.setConsent(consent);
-        controls.stopAll();
+        if (req.url === "/stop") {
+          try {
+            controls.revokeAll();
+          } finally {
+            controls.stopAll();
+          }
+          return res.writeHead(204).end();
+        }
+        const { group, on } = JSON.parse(body);
+        if (!Object.hasOwn(GROUPS, group) || typeof on !== "boolean")
+          return res.writeHead(400).end();
+        const { consent, outputs } = GROUPS[group];
+        if (consent) controls.setConsent(grants(consent, on));
+        if (outputs) controls.setOutputs(grants(outputs, on));
+        // Grants end media, speech and the preview when their revision changes; a recording needs telling
+        if (group === "microphone" && !on) controls.stopAll();
         return res.writeHead(204).end();
       } catch {
         return res.writeHead(400).end();
       }
     }
     if (req.method !== "GET") return res.writeHead(405).end();
+    if (req.url === "/levels")
+      return res
+        .writeHead(200, { "Content-Type": "application/json" })
+        .end(JSON.stringify(display.levels()));
+    if (req.url === "/preview") {
+      // The picture of the room stays on this machine, whatever address the server is bound to
+      if (!controls?.preview || !LOOPBACK.includes(req.socket.remoteAddress))
+        return res.writeHead(404).end();
+      return controls.preview.stream(res);
+    }
     const state = {
       ...display.read(),
       ...(controls
         ? {
             controlToken: token,
-            canUse: typeof controls.used === "function",
+            canUse: typeof controls.input === "function",
             canTalk: typeof controls.talk === "function",
+            preview: controls.preview?.status() ?? "none",
             pending: controls.proposals?.pending() ?? null,
           }
         : {}),
@@ -220,10 +272,10 @@ export function displayServer(display, controls) {
       return res
         .writeHead(200, { "Content-Type": "application/json" })
         .end(JSON.stringify(state));
-    if (state.output?.data && req.url === "/output/" + state.output.at)
+    if (state.picture && req.url === "/output/" + state.picture.at)
       return res
-        .writeHead(200, { "Content-Type": state.output.mime })
-        .end(Buffer.from(state.output.data, "base64"));
+        .writeHead(200, { "Content-Type": display.picture.mime })
+        .end(Buffer.from(display.picture.data, "base64"));
     if (display.frame && req.url === "/frame/" + state.frameAt)
       return res
         .writeHead(200, { "Content-Type": "image/jpeg" })
