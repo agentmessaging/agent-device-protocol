@@ -1,369 +1,100 @@
-:root {
-  color-scheme: dark;
-  font:
-    16px/1.4 "Avenir Next",
-    "Segoe UI",
-    system-ui,
-    sans-serif;
-  background: #0d1014;
-  color: #f5f0e8;
-}
-* {
-  box-sizing: border-box;
-}
-body {
-  margin: 0;
-  --glow: #ff9868;
-  --core: #ffcca0;
-  --speed: 4s;
-  min-height: 100svh;
-  background: radial-gradient(
-    ellipse at 50% 42%,
-    #202126 0%,
-    #101318 47%,
-    #0b0d10 86%
-  );
-}
-body[data-state="waiting"] {
-  --glow: #e3b658;
-  --core: #fff0a4;
-  --speed: 2s;
-}
-body[data-state="working"] {
-  --speed: 1.25s;
-}
-body[data-state="disconnected"],
-body[data-state="unknown"] {
-  --glow: #83929e;
-  --core: #ced5d9;
-}
-header {
-  height: 66px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 clamp(20px, 4vw, 64px);
-  border-bottom: 1px solid #ffffff15;
-  color: #a6adb6;
-  font-size: 0.87rem;
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  color: #eee7db;
-  font-weight: 650;
-  font-size: 1rem;
-}
-.brand b {
-  color: #ff996a;
-  font-size: 2rem;
-  line-height: 1;
-}
-main {
-  display: grid;
-  place-items: center;
-  min-height: calc(100svh - 66px);
-  padding: 40px 12px;
-}
-.presence {
-  text-align: center;
-  min-width: 0;
-}
-.signal {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: clamp(180px, 27vw, 320px);
-  aspect-ratio: 1;
-  margin: 0 auto 24px;
-}
-.orbit,
-.orb {
-  border-radius: 50%;
-}
-.orbit {
-  position: absolute;
-  inset: 0;
-  border: 1px solid #ffffff12;
-  outline: 1px dashed #ffffff15;
-  outline-offset: -14px;
-}
-.orb {
-  width: 68%;
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-  background: radial-gradient(
-    circle at 36% 26%,
-    var(--core),
-    var(--glow) 37%,
-    #582c27 76%,
-    #211716 100%
-  );
-  box-shadow:
-    0 0 52px color-mix(in srgb, var(--glow) 19%, transparent),
-    inset -12px -12px 28px #0005;
-  animation: breathe var(--speed) ease-in-out infinite alternate;
-}
-.wave {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 44px;
-}
-.wave i {
-  width: 3px;
-  border-radius: 8px;
-  background: #402d2a;
-  height: 16%;
-}
-.wave i:nth-child(2n) {
-  height: 45%;
-}
-.wave i:nth-child(3n) {
-  height: 78%;
-}
-.wave i:nth-child(5) {
-  height: 100%;
-}
-body[data-state="working"] .wave i {
-  animation: wave 0.75s ease-in-out infinite alternate;
-}
-body[data-state="working"] .wave i:nth-child(2n) {
-  animation-delay: -0.55s;
-}
-body[data-state="disconnected"] .orb,
-body[data-state="unknown"] .orb {
-  animation: none;
-  filter: saturate(0.25);
-}
-h1 {
-  font-weight: 520;
-  font-size: clamp(40px, 6vw, 84px);
-  letter-spacing: -0.06em;
-  line-height: 1.1;
-  margin: 0 0 12px;
-  overflow-wrap: anywhere;
-}
-.status {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: #eee2da;
-  font-size: 1.15rem;
-}
-.status i {
-  height: 8px;
-  width: 8px;
-  border-radius: 50%;
-  background: var(--glow);
-}
-#address {
-  font:
-    12px/1.6 ui-monospace,
-    monospace;
-  color: #a9b0b8;
-  overflow-wrap: anywhere;
-}
-aside {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  width: clamp(196px, 22vw, 312px);
-  background: #191d21;
-  border: 1px solid #44464a;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 12px 38px #0005;
-}
-.pip-head,
-aside footer {
-  padding: 10px 14px;
-}
-.pip-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.pip-head h2 {
-  font-size: 0.86rem;
-  margin: 0;
-  font-weight: 550;
-}
-button {
-  background: none;
-  color: #dbb49b;
-  border: 0;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.79rem;
-}
-button:focus-visible {
-  outline: 2px solid #ffa479;
-}
-#preview {
-  position: relative;
-  display: grid;
-  place-items: center;
-  aspect-ratio: 16/9;
-  background: #101317;
-  color: #a7adb5;
-  font-size: 0.85rem;
-  text-align: center;
-  padding: 6px;
-}
-#frame {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-aside footer {
-  color: #aeb5bd;
-  font-size: 0.75rem;
-}
-.expanded {
-  width: min(64vw, 650px);
-}
-@keyframes breathe {
-  to {
-    transform: scale(1.045);
-  }
-}
-@keyframes wave {
-  to {
-    transform: scaleY(0.45);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before {
-    animation: none !important;
-  }
-}
-@media (max-width: 840px), (max-height: 630px) {
-  main {
-    min-height: 0;
-    padding: 28px 12px;
-  }
-  .signal {
-    width: 165px;
-    margin-bottom: 12px;
-  }
-  aside {
-    position: relative;
-    bottom: auto;
-    right: auto;
-    margin: 0 auto 20px;
-    width: min(85vw, 310px);
-  }
-  .expanded {
-    width: min(90vw, 620px);
-  }
-}
+@font-face{font-family:Outfit;src:url(/outfit.woff2) format("woff2");font-weight:300 700;font-style:normal;font-display:swap}
+:root{--ink:#0f1724;--ink2:#172234;--line:#2a3a52;--text:#eef3fa;--muted:#8fa3bd;--agent:#5aa2ff;--you:#f2f6fb;--look:#ffd166;--stop:#ff8a8a}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;overflow:hidden;background:var(--ink);color:var(--text);font:400 17px/1.4 Outfit,system-ui,sans-serif}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--agent);outline-offset:3px}
+#scope{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
+.who,.you-name,.words,.dock,.typing,aside{z-index:2}
+aside{z-index:3}
+#seg-you #eye-note{z-index:2}
 
-#consent {
-  border-top: 1px solid #ffffff18;
-  padding: 10px 14px;
-  display: grid;
-  gap: 8px;
-  font-size: 0.8rem;
-}
-#consent[hidden] {
-  display: none;
-}
-#consent label {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-#stop-media {
-  border: 1px solid #9a4c43;
-  border-radius: 5px;
-  padding: 8px;
-}
-#media-status {
-  color: #ffb48c;
-}
+/* Each channel owns its part of the screen: its voice, its words, its controls */
+.seg{position:fixed;left:0;right:0}
+#seg-agent{top:0;height:52%}
+#seg-you{top:52%;bottom:0;border-top:1px solid var(--line);overflow:hidden}
+.who{position:fixed;left:48px;right:48px;top:34px}
+.who h1{font-size:44px;font-weight:600;letter-spacing:-.02em;line-height:1}
+.who p{margin-top:7px;max-width:1000px;font-size:23px;font-weight:300;line-height:1.3;color:var(--muted);transition:color .2s}
+.who p.words-on{color:var(--text)}
+.you-name{position:fixed;left:48px;top:calc(52% + 18px);font-size:24px;font-weight:600;color:var(--muted);transition:color .3s}
+body[data-state=listening] .you-name{color:var(--you)}
+body[data-state=speaking] .who h1,body[data-state=thinking] .who h1{color:var(--agent)}
 
-#proposal {
-  position: relative;
-  z-index: 3;
-  background: #30271b;
-  border: 1px solid #ad8754;
-  margin: 16px;
-  padding: 16px;
-  border-radius: 8px;
-  overflow-wrap: anywhere;
-}
-#proposal[hidden] {
-  display: none;
-}
-#proposal button {
-  padding: 10px;
-  border: 1px solid #ad8754;
-  border-radius: 5px;
-  margin-right: 12px;
-}
+/* words stay in the channel that said them */
+.words{position:fixed;left:48px;font-weight:300;line-height:1.32;transition:opacity .3s}
+#you-words{top:calc(52% + 56px);width:min(760px,calc(100% - 96px));font-size:19px;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.6)}
 
-#capture-indicator {
-  position: fixed;
-  top: 76px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  background: #a92326;
-  color: white;
-  border: 2px solid #ffc5bd;
-  border-radius: 9px;
-  padding: 12px 22px;
-  font-size: 1.15rem;
-  font-weight: 700;
-  text-align: center;
-  box-shadow: 0 0 24px #d32d2d66;
-}
-#capture-indicator[hidden] {
-  display: none;
-}
-#device-input {
-  max-width: 440px;
-  margin: 20px auto;
-  text-align: left;
-}
-#device-input[hidden] {
-  display: none;
-}
-#input-text {
-  display: block;
-  width: 100%;
-  margin: 8px 0;
-  padding: 10px;
-  background: #151a20;
-  color: #fff;
-  border: 1px solid #66707a;
-  border-radius: 6px;
-  font: inherit;
-}
-#use-device,
-#device-input button {
-  border: 1px solid #a67f61;
-  border-radius: 6px;
-  padding: 9px 18px;
-}
+/* the mic leads, the keyboard sits at its shoulder */
+.dock{position:fixed;left:50%;bottom:30px;width:100px;height:100px;transform:translateX(-50%)}
+.round{display:grid;place-items:center;border-radius:50%;transition:background .2s,box-shadow .2s,transform .1s,color .2s}
+.round svg{display:block}
+#talk{width:100px;height:100px;background:var(--agent);color:#07121f}
+#talk:active{transform:scale(.96)}
+body[data-state=listening] #talk{background:var(--you);box-shadow:0 0 0 12px rgba(242,246,251,.14)}
+.tools{position:fixed;left:48px;bottom:30px;display:flex;flex-direction:column;gap:10px;z-index:2}
+.tool{width:46px;height:46px;background:rgba(23,34,52,.86);border:1px solid var(--line);color:var(--text)}
+.tool:hover{border-color:var(--muted)}
+#cam .off{display:none}
+body.typing-on #type{background:var(--agent);border-color:var(--agent);color:#07121f}
+body.cam-off #cam{background:var(--stop);border-color:var(--stop);color:#2a0f12}
+body.cam-off #cam .on{display:none}body.cam-off #cam .off{display:block}
+body.cam-off .eye .view,body.cam-off .eye .scrim,body.no-view .eye .scrim{display:none}
+body.cam-off #seg-you,body.no-view #seg-you{background:var(--ink2)}
 
-#agent-output {
-  max-width: 560px;
-  margin: 16px auto;
-  overflow-wrap: anywhere;
-  font-size: 1.2rem;
-}
-#agent-output[hidden] {
-  display: none;
-}
-#output-image {
-  max-width: 100%;
-  max-height: 260px;
-  border-radius: 8px;
-}
+/* typing happens in your channel */
+.typing{position:fixed;left:50%;bottom:30px;width:min(620px,calc(100% - 96px));transform:translateX(-50%);display:none;gap:10px;align-items:center}
+.typing textarea{flex:1;height:76px;padding:13px 16px;background:var(--ink2);border:1px solid var(--line);border-radius:14px;color:var(--text);font:inherit;font-size:19px;resize:none}
+.typing .round{width:44px;height:44px;flex:none}
+.typing .send{background:var(--agent);color:#07121f}
+body.typing-on .dock{display:none}body.typing-on .typing{display:flex}
+
+/* your channel IS the camera: this is you, on this screen and nowhere else */
+.eye{position:absolute;inset:0}
+.eye .view{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+/* so a wave and words stay readable on any picture */
+.eye .scrim{position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,23,36,.72),rgba(15,23,36,.25) 55%,rgba(15,23,36,.35)),linear-gradient(0deg,rgba(15,23,36,.75),rgba(15,23,36,.1) 60%)}
+.eye p{position:absolute;right:24px;top:16px;padding:3px 11px;border-radius:12px;background:rgba(15,23,36,.72);font-size:14px;color:var(--text)}
+body.looking .eye::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 3px var(--look)}
+body.looking .eye p{color:var(--look)}
+
+/* settings */
+#gear{font-size:21px}
+aside{position:fixed;top:0;left:0;bottom:0;width:360px;padding:30px 32px;background:var(--ink2);border-right:1px solid var(--line);transform:translateX(-100%);transition:transform .22s ease;display:flex;flex-direction:column;gap:6px}
+body.settings aside{transform:none}
+aside h2{font-size:23px;font-weight:600;margin-bottom:14px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.row span small{display:block;font-size:14px;color:var(--muted)}
+.sw{width:50px;height:30px;border-radius:15px;background:var(--line);position:relative;flex:none;transition:background .15s}
+.sw::after{content:"";position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .15s}
+.sw[aria-checked=true]{background:var(--agent)}.sw[aria-checked=true]::after{left:23px}
+#stop{margin-top:auto;padding:14px;border:1px solid var(--stop);border-radius:12px;color:var(--stop)}
+#close{position:absolute;right:26px;top:32px;font-size:15px;color:var(--muted)}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* what the prototype did not need: real text can be long, and these must always be seen */
+[hidden]{display:none!important}
+.who h1{max-width:calc(100% - 400px);padding-bottom:.12em;margin-bottom:-.12em;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+aside h2{padding-right:52px;overflow-wrap:anywhere}
+.eye p{max-width:calc(100% - 48px);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.who p,#you-words{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.who p{-webkit-line-clamp:8}
+#you-words{-webkit-line-clamp:5}
+#talk:disabled{opacity:.4;cursor:default}
+body.no-talk .dock,body.no-input #type,body.read-only .tools{display:none}
+
+/* what the agent shows sits in the agent's space */
+#output-image{position:fixed;right:48px;top:96px;max-width:38%;max-height:calc(52% - 112px);border-radius:12px;z-index:2}
+body.has-picture .who p{max-width:calc(100% - 42vw)}
+
+/* the in-use sign: device-driven, above everything, never covered */
+#capture-indicator{position:fixed;right:48px;top:30px;max-width:340px;padding:8px 18px;border-radius:22px;background:var(--look);color:#2a2008;font-size:20px;font-weight:600;line-height:1.3;z-index:6}
+
+/* a change waiting for this device's owner */
+#proposal{position:fixed;left:50%;top:96px;width:min(600px,calc(100% - 96px));max-height:calc(100% - 128px);overflow:auto;transform:translateX(-50%);padding:24px 28px;background:var(--ink2);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.5);z-index:5}
+#proposal-text{font-size:21px;font-weight:300;line-height:1.35;overflow-wrap:anywhere}
+#proposal button{margin:18px 10px 0 0;padding:11px 18px;border-radius:12px}
+#approve-change{background:var(--agent);color:#07121f}
+#reject-change{border:1px solid var(--line)}
+#proposal-error,#settings-error{font-size:14px;color:var(--stop)}

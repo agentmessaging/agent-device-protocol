@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- New kiosk page: the agent's voice and words above, the person's picture, voice and words below, with Outfit served from the device. Tap to talk, typing, four grant switches and real voice levels (`/levels`). `Use this device` is gone: talking or typing counts.
+- Security: the local stop and the Camera switch now also turn off `camera`. Before, still pictures still worked after "Stop & revoke media". The local stop covers every grant.
+- Talking stops the agent's speech at once: during a talk session `speaker.play` and `speaker.say` return `played:false`, so the microphone does not pick her up.
+- Local camera preview on loopback, with `ADP_PREVIEW=off` for slow devices. It never reaches the agent.
 - Hold to talk: a person holds a control on the device, and the recording reaches the controller as a signed `audio` event.
 - A jump to the device already active changes nothing. Before, a person typing at a device cancelled what the agent was doing there.
 - A controller says why it refused a device connection, and a device stops on a final refusal instead of retrying forever (#22).

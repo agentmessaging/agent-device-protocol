@@ -12,14 +12,18 @@ import {
   self,
   peer,
   setMediaConsent,
+  revokeAllGrants,
   readLocal,
   writeLocal,
   applyLocalChange,
 } from "../../packages/sdk/state.mjs";
 import { agentAddress, localAddress } from "@ai-maestro/device-sdk";
-import { DisplayState, displayServer } from "../../apps/display/server.mjs";
+import { DisplayState, displayServer, groupOn } from "../../apps/display/server.mjs";
 import { Proposals } from "./proposals.mjs";
-import { MediaManager } from "./media.mjs";
+import { MediaManager, captureMedia, playPCM, mediaAvailable } from "./media.mjs";
+import { CameraPreview } from "./preview.mjs";
+import { Voice } from "./output.mjs";
+import { cameraReady, snapshot } from "./hardware.mjs";
 import { bridge } from "./server.mjs";
 const [action, arg, option, ...extra] = process.argv.slice(2);
 if (action === "init" && !arg) init();
@@ -78,11 +82,31 @@ else if (
     (p) => writeLocal("proposal.json", p),
     applyLocalChange,
   );
-  const media = new MediaManager(peer, display);
+  const voice = new Voice();
+  display.voice = voice;
+  const preview = new CameraPreview({
+    enabled: process.env.ADP_PREVIEW !== "off",
+    ready: () => mediaAvailable("video"),
+    allowed: () => {
+      try {
+        return groupOn(peer(), "camera") && display.indicatorReady();
+      } catch {
+        return false;
+      }
+    },
+  });
+  const media = new MediaManager(peer, display, {
+    captureMedia,
+    playPCM,
+    mediaAvailable,
+    pauseCamera: () => preview.pause(),
+    resumeCamera: () => preview.resume(),
+  });
   let connection;
   const talk = new PushToTalk({
     getPeer: peer,
     display,
+    voice,
     send: (audio) => connection.audio(audio),
   });
   // serve can also connect out, for device input: `connect` alone has no live media
@@ -90,14 +114,16 @@ else if (
   const screen = displayServer(display, {
     setConsent: setMediaConsent,
     setOutputs: setOutputConsent,
+    revokeAll: revokeAllGrants,
     stopAll: () => {
       talk.cancel();
       media.stopAll();
+      voice.silence();
     },
+    preview,
     proposals,
     ...(controllerOrigin
       ? {
-          used: () => connection.used(),
           input: (text) => connection.input(text),
           talk: (action) => (action === "start" ? talk.start() : talk.stop()),
           afterDecision: (receipt) =>
@@ -111,7 +137,11 @@ else if (
   const server = bridge(
     self(),
     peer,
-    undefined,
+    {
+      cameraReady,
+      snapshot: (signal) => preview.exclusive(() => snapshot(signal)),
+      voice,
+    },
     display,
     action === "connect" ? undefined : media,
     proposals,
@@ -148,6 +178,7 @@ else if (
   if (action !== "connect") console.log("Device listening on http://" + host + ":23110");
   const stop = async () => {
     media.stopAll();
+    preview.close();
     await connection?.stop();
     screen.close();
     screen.closeAllConnections();

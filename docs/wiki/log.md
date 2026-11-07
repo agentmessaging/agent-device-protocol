@@ -15,3 +15,7 @@ Checked all 20 Markdown files in this change, 104 local Markdown links, index co
 ## [2026-11-06] fix | Kiosk lifecycle bounds
 
 Measured the display page: no leak reproduced in headless Chrome on macOS. Bounded presence and control requests, skipped rendering of unchanged state, and added a six-hour idle reload as a safety net. See [B001](backlog/B001-kiosk-memory-growth.md). Issue #20 stays open for target-device evidence.
+
+## [2026-11-06] feature | Kiosk redesign
+
+Built the owner's approved kiosk design as the real page, with [F005](backlog/F005-kiosk-redesign.md): tap to talk that silences the agent, real levels, four grant switches, a local camera preview, and a local stop that covers every grant, including `camera`. Tested with fake hardware and in a browser against a simulated bridge; physical-device acceptance and a soak with the preview remain open. [B001](backlog/B001-kiosk-memory-growth.md) stays open.

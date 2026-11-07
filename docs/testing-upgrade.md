@@ -22,7 +22,7 @@ systemctl --user restart ai-maestro-device
 chromium --app=http://127.0.0.1:23111
 ```
 
-If using a terminal instead of a service, stop the old bridge and run `node clients/linux/cli.mjs serve TAILSCALE_IP`. Keep the screen visible. The device does not advertise camera/microphone capture without the local indicator. Enable the desired live media/output controls on that screen; snapshot permission remains the local camera grant.
+If using a terminal instead of a service, stop the old bridge and run `node clients/linux/cli.mjs serve TAILSCALE_IP`. Keep the screen visible. The device does not advertise camera/microphone capture without the local indicator. Enable what you want with the switches behind the gear on that screen; the Camera switch covers snapshots and live video.
 
 On the controller host, use the actual numeric tailnet URL:
 
@@ -56,13 +56,13 @@ systemctl --user stop ai-maestro-device
 node clients/linux/cli.mjs connect http://CONTROLLER_TAILSCALE_IP:23112
 ```
 
-Permit the MacBook to reach TCP 23112 on the controller through the tailnet policy. The local screen remains http://127.0.0.1:23111. Use its “Use this device” button or text box; the controller verifies the source and activates that device. The reference listener persists accepted input and delivers it with its configured `amp-send`; Maestro's embedded implementation supplies its own delivery callback. Transfer closes the former connection; configure the new controller address locally before reconnecting.
+Permit the MacBook to reach TCP 23112 on the controller through the tailnet policy. The local screen remains http://127.0.0.1:23111. Tap the microphone or type; the controller verifies the source and activates that device. The reference listener persists accepted input and delivers it with its configured `amp-send`; Maestro's embedded implementation supplies its own delivery callback. Transfer closes the former connection; configure the new controller address locally before reconnecting.
 
 For a persistent outbound user service, use `clients/linux/ai-maestro-device-connect.service` and set ADP_CONTROLLER in the same service.env file. Enable only one bridge mode at a time.
 
 ## Output and owner extensions
 
-On Omarchy, `sudo pacman -S --needed ffmpeg pipewire-pulse espeak-ng` supplies the media and optional speech adapters. Enable each output permission on the screen, or locally with `node clients/linux/cli.mjs grant display.text on` (likewise display.image and speaker.say).
+On Omarchy, `sudo pacman -S --needed ffmpeg pipewire-pulse espeak-ng` supplies the media and optional speech adapters. Enable each output permission with the Speaker and Screen switches, or locally with `node clients/linux/cli.mjs grant display.text on` (likewise display.image and speaker.say).
 
 For custom capabilities, create owner-controlled JSON and `.mjs` files under ADP_HOME/capabilities. The default ADP_HOME is ~/.config/ai-maestro-device. Example definition:
 

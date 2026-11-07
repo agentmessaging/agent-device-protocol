@@ -190,15 +190,18 @@ test("local consent requires the display origin and token; stop revokes all stre
   const origin = await start(
     t,
     displayServer(s.display, {
-      setConsent: (media) => {
-        s.peer = { ...s.peer, media };
+      revokeAll: () => {
+        s.peer = {
+          ...s.peer,
+          media: { video: false, microphone: false, speaker: false },
+        };
       },
       stopAll: () => s.manager.stopAll(),
     }),
   );
   const state = await (await fetch(origin + "/state")).json();
   assert.equal(
-    (await fetch(origin + "/consent", { method: "POST", body: "{}" })).status,
+    (await fetch(origin + "/grant", { method: "POST", body: "{}" })).status,
     403,
   );
   const result = await fetch(origin + "/stop", {
