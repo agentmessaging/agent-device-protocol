@@ -32,11 +32,11 @@ body[data-state=speaking] .who h1,body[data-state=thinking] .who h1{color:var(--
 #talk{width:100px;height:100px;background:var(--agent);color:#07121f}
 #talk:active{transform:scale(.96)}
 body[data-state=listening] #talk{background:var(--you);box-shadow:0 0 0 12px rgba(242,246,251,.14)}
-.tools{position:fixed;left:48px;bottom:12px;display:flex;flex-direction:column;gap:6px;z-index:2}
+.tools{position:fixed;left:48px;top:70%;bottom:0;display:flex;flex-direction:column;justify-content:center;gap:6px;z-index:2}
 .tool{width:42px;height:42px;background:rgba(23,34,52,.86);border:1px solid var(--line);color:var(--text)}
 .tool:hover{border-color:var(--muted)}
 #cc.off{color:var(--muted)}
-#captions{position:fixed;left:102px;bottom:12px;width:230px;padding:6px 16px;background:var(--ink2);border:1px solid var(--line);border-radius:14px;z-index:3}
+#captions{position:fixed;left:102px;bottom:max(8px,calc(15vh - 93px));width:230px;padding:6px 16px;background:var(--ink2);border:1px solid var(--line);border-radius:14px;z-index:3}
 #captions .row:last-child{border-bottom:0}
 #captions span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:12px}
 #cam .off{display:none}
