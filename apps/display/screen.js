@@ -24,7 +24,8 @@ const STATES = {
   idle: { agent: 0.08, you: 0.03, tight: 0, text: "Here with you" },
   listening: { agent: 0.03, you: 1, tight: 0, text: "Listening to you" },
   thinking: { agent: 0.3, you: 0.03, tight: 1, text: "Thinking" },
-  speaking: { agent: 1, you: 0.03, tight: 0, text: "Talking" },
+  // No word for this: her wave and her own words show it
+  speaking: { agent: 1, you: 0.03, tight: 0, text: "" },
 };
 // The 2xAI Lab signal: interlocked traces that swell in the middle and pinch at the ends
 function traces(cy, span, count, t, colors, alpha, width, speed, full = W) {
@@ -211,6 +212,7 @@ function renderSign(indicators) {
     .filter((v, i, a) => a.indexOf(v) === i)
     .join(" · ");
 }
+let shownName;
 function render(state, offline = false) {
   last = state;
   const { agent, indicators = [], indicatorId, switches = {}, output, heard } = state;
@@ -222,7 +224,12 @@ function render(state, offline = false) {
     lastAgent = agent;
     words = "";
     youWords.textContent = "";
-    setName(displayName(agent));
+  }
+  // The label comes with the first activity update, a moment after the address
+  const name = state.label || displayName(agent);
+  if (name !== shownName && !offline) {
+    shownName = name;
+    setName(name);
   }
   problem = offline ? "Bridge disconnected" : agent ? "" : "Unassigned";
   body.classList.toggle("read-only", !controlToken);
