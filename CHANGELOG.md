@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- An activity update can carry `label`, the agent's display name, so a device shows "Lola" and not `pas-lola`.
 - New kiosk page: the agent's voice and words above, the person's picture, voice and words below, with Outfit served from the device. Tap to talk, typing, four grant switches and real voice levels (`/levels`). `Use this device` is gone: talking or typing counts.
 - Security: the local stop and the Camera switch now also turn off `camera`. Before, still pictures still worked after "Stop & revoke media". The local stop covers every grant.
 - Talking stops the agent's speech at once: during a talk session `speaker.play` and `speaker.say` return `played:false`, so the microphone does not pick her up.
