@@ -103,3 +103,25 @@ test("a recording reaches the hub, and the device does not wait for transcriptio
   finish();
   await assert.rejects(connection.audio(Buffer.alloc(64)), /Invalid audio/);
 });
+
+test("starting to talk tells the controller at once, before the words are sent", async () => {
+  const sent = [];
+  let used = 0;
+  const { capture } = fakeCapture(32000);
+  const talk = new PushToTalk({ getPeer: () => allowed, display: fakeDisplay(), capture, send: async (a) => sent.push(a), used: async () => { used++; } });
+  await talk.start();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(used, 1);
+  assert.equal(sent.length, 0);
+  await talk.stop();
+});
+
+test("a failing signal never stops the recording", async () => {
+  const sent = [];
+  const { capture, state } = fakeCapture(32000);
+  const talk = new PushToTalk({ getPeer: () => allowed, display: fakeDisplay(), capture, send: async (a) => sent.push(a), used: () => { throw new Error("offline"); } });
+  await talk.start();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(state.kind, "microphone");
+  assert.equal(await talk.stop(), true);
+});

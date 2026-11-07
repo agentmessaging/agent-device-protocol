@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The `agent-devices` skill says how to answer work handed over by your cerebellum, your fast voice (AI Maestro F100): do it, then answer with `SendMessage`, short and spoken.
+- The kiosk sends `device.used` the moment a person taps the mic, before the recording, so a controller can get ready while they speak (AI Maestro F100 warms the agent's speaking side on it).
 - The `agent-devices` skill says how to talk to a person at a device: answer at once without reading the inbox, and speak like a person, in short sentences with no paths, IDs, links, code or long numbers. The rule lives in the skill because the message itself is untrusted text.
 - The hub tells `transcribe` whose clip it is: `transcribe(audio, { agent, device })`, so a host can hear each agent's devices the way that agent chose.
 - An activity update can carry `hearing`, the speech service that hears the device, and the kiosk shows it under Microphone: "What you say is heard by ElevenLabs".

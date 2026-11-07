@@ -6,8 +6,8 @@ const MAX_SECONDS = 20;
 
 /** Tap to talk, tap to send. The microphone grant and the in-use sign apply as to any recording. */
 export class PushToTalk {
-  constructor({ getPeer, display, send, capture = captureMedia, voice }) {
-    Object.assign(this, { getPeer, display, send, capture, voice });
+  constructor({ getPeer, display, send, capture = captureMedia, voice, used }) {
+    Object.assign(this, { getPeer, display, send, capture, voice, used });
     this.session = null;
   }
   async start() {
@@ -29,6 +29,8 @@ export class PushToTalk {
     const session = { chunks };
     this.session = session;
     this.display.talking = true;
+    // Tells the controller someone is talking now, before the words: it can get ready while they speak
+    Promise.resolve().then(() => this.used?.()).catch(() => {});
     session.sign = setInterval(
       () => this.display.keepIndicator("microphone"),
       1000,
