@@ -24,7 +24,8 @@ const STATES = {
   idle: { agent: 0.08, you: 0.03, tight: 0, text: "Here with you" },
   listening: { agent: 0.03, you: 1, tight: 0, text: "Listening to you" },
   thinking: { agent: 0.3, you: 0.03, tight: 1, text: "Thinking" },
-  speaking: { agent: 1, you: 0.03, tight: 0, text: "Talking" },
+  // No word for this: her wave and her own words show it
+  speaking: { agent: 1, you: 0.03, tight: 0, text: "" },
 };
 // The 2xAI Lab signal: interlocked traces that swell in the middle and pinch at the ends
 function traces(cy, span, count, t, colors, alpha, width, speed, full = W) {
