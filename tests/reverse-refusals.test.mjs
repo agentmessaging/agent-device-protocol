@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { identity } from "../packages/sdk/index.mjs";
 import { ReverseHub, DeviceConnection } from "../packages/sdk/reverse.mjs";
+import { WebSocket } from "ws";
 
 async function hubFor(t, getDevices, owner = identity()) {
   const refused = [];
@@ -79,4 +80,30 @@ test("a controller that is down is temporary: the device keeps trying and connec
   hub.server.listen(port, "127.0.0.1");
   t.after(() => hub.close());
   await once(connection, "connected");
+});
+
+function socketWith(t, origin, device, options) {
+  const ws = new WebSocket(origin.replace("http", "ws") + "/v1/connect/" + device.key, options);
+  t.after(() => ws.terminate());
+  return ws;
+}
+
+test("a phone's socket, which sends the hub's own origin, gets the handshake", async (t) => {
+  const device = identity();
+  const { origin } = await hubFor(t, () => ({ [device.key]: { agent: "lola@host.local" } }));
+  const [hello] = await once(socketWith(t, origin, device, { origin }), "message");
+  assert.equal(JSON.parse(hello).type, "hello");
+});
+
+test("a web page is dropped and logged, even under a domain that points at the hub", async (t) => {
+  const device = identity();
+  const { origin, refused } = await hubFor(t, () => ({ [device.key]: { agent: "lola@host.local" } }));
+  const port = new URL(origin).port;
+  for (const options of [
+    { origin: "https://evil.example" },
+    { origin: "http://evil.example:" + port, headers: { Host: "evil.example:" + port } },
+  ]) {
+    await once(socketWith(t, origin, device, options), "error");
+  }
+  assert.deepEqual(refused, ["origin", "origin"]);
 });

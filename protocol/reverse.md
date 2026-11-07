@@ -2,6 +2,8 @@
 
 This extends [v1](v1.md). An owned device opens a WebSocket directly to its controller at `ws://TAILNET_IPV4:PORT/v1/connect/DEVICE_KEY`. Loopback is also allowed for local tests. Public origins, DNS names, redirects and cloud relays are outside this profile. Tailscale supplies encryption; every authority-bearing message still uses the v1 Ed25519 domain and pinned keys.
 
+A controller refuses a connection whose `Origin` is a web page's. It accepts no `Origin`, and its own origin: phone socket libraries always send the origin of the address they connect to, and cannot remove it.
+
 ## Authentication and lifecycle
 
 1. The controller looks up the URL key in its operator-configured inventory. Unknown keys are refused before upgrade. The key selects the agent's controller identity; there is no single signing key for all agents on a host.

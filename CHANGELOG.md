@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The hub accepts a device whose socket sends the hub's own `Origin`, as iOS and Android socket libraries always do. Before, it dropped them with no log, so a phone could never connect. Any other `Origin` is still dropped, and now logged as a refusal.
 - The kiosk's icon column is tighter and centred between the person's wave and the bottom of the screen.
 - The kiosk settings no longer call every agent "her" or "she".
 - Captions button on the kiosk: a small menu turns the agent's words and the person's words on or off, remembered on that screen.
