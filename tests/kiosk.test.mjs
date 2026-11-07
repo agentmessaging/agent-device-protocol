@@ -570,3 +570,31 @@ test("the page loads nothing from outside the device", async (t) => {
     assert.doesNotMatch(source, /https?:\/\//, name);
   }
 });
+
+test("a device shows the label its controller sends, and refuses a bad one", async (t) => {
+  const { DisplayState } = await import("../apps/display/server.mjs");
+  const { bridge } = await import("../clients/linux/server.mjs");
+  const { identity, publishActivity } = await import("../packages/sdk/index.mjs");
+  const { once } = await import("node:events");
+  const owner = identity(),
+    device = identity();
+  const peer = { key: owner.key, assignedAgent: "pas-lola@host.local", revision: "one" };
+  const display = new DisplayState(() => peer);
+  const server = bridge(device, () => peer, undefined, display);
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => {
+    server.close();
+    server.closeAllConnections();
+  });
+  const origin = "http://127.0.0.1:" + server.address().port;
+  const send = (label) =>
+    publishActivity(origin, owner, device.key, peer.assignedAgent, "idle", fetch, true, label);
+  await send("Lola");
+  assert.equal(display.read().label, "Lola");
+  await assert.rejects(send("bad\nname"));
+  await assert.rejects(send("x".repeat(65)));
+  await send();
+  assert.equal(display.read().label, "Lola");
+});
+

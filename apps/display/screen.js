@@ -211,6 +211,7 @@ function renderSign(indicators) {
     .filter((v, i, a) => a.indexOf(v) === i)
     .join(" · ");
 }
+let shownName;
 function render(state, offline = false) {
   last = state;
   const { agent, indicators = [], indicatorId, switches = {}, output, heard } = state;
@@ -222,7 +223,12 @@ function render(state, offline = false) {
     lastAgent = agent;
     words = "";
     youWords.textContent = "";
-    setName(displayName(agent));
+  }
+  // The label comes with the first activity update, a moment after the address
+  const name = state.label || displayName(agent);
+  if (name !== shownName && !offline) {
+    shownName = name;
+    setName(name);
   }
   problem = offline ? "Bridge disconnected" : agent ? "" : "Unassigned";
   body.classList.toggle("read-only", !controlToken);
