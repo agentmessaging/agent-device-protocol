@@ -108,6 +108,7 @@ else if (
     display,
     voice,
     send: (audio) => connection.audio(audio),
+    used: () => connection?.used(),
   });
   // serve can also connect out, for device input: `connect` alone has no live media
   const controllerOrigin = action === "connect" ? arg : process.env.ADP_CONTROLLER;
