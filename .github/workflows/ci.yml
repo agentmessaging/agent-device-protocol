@@ -18,6 +18,10 @@ jobs:
             sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 update -qq
             sudo apt-get install -y ffmpeg
           fi
+      - name: Libraries for the ESP32 client's host test
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 update -qq
+          sudo apt-get install -y libsodium-dev libcjson-dev pkg-config
       - run: npm ci --ignore-scripts
       - run: systemd-analyze verify clients/linux/ai-maestro-device.service
       - run: npm run typecheck

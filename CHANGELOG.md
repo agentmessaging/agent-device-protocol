@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- ESP32 client (experimental, `clients/embedded/esp32`): ESP-IDF firmware that connects out to its controller over Wi-Fi, keeps its Ed25519 key in NVS (encrypted on S2, S3, C3 and C6), and answers `device.health` and, with a board screen, `display.text`. Its protocol core is tested against the SDK on a computer; the firmware is not yet tested on a board.
 - The `agent-devices` skill says how to answer work handed over by your cerebellum, your fast voice (AI Maestro F100): do it, then answer with `SendMessage`, short and spoken.
 - The kiosk sends `device.used` the moment a person taps the mic, before the recording, so a controller can get ready while they speak (AI Maestro F100 warms the agent's speaking side on it).
 - The `agent-devices` skill says how to talk to a person at a device: answer at once without reading the inbox, and speak like a person, in short sentences with no paths, IDs, links, code or long numbers. The rule lives in the skill because the message itself is untrusted text.

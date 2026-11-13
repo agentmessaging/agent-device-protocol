@@ -1,0 +1,39 @@
+menu "Agent Device Protocol"
+
+    config ADP_WIFI_SSID
+        string "Wi-Fi network name"
+        default ""
+
+    config ADP_WIFI_PASSWORD
+        string "Wi-Fi password"
+        default ""
+
+    config ADP_CONTROLLER_URL
+        string "Controller address"
+        default ""
+        help
+            ws://IPV4:PORT of the controller's outbound listener, with no path,
+            for example ws://100.64.0.10:23112. Loopback, Tailscale (100.64.0.0/10)
+            and private LAN addresses only. No DNS names.
+
+    config ADP_CONTROLLER_KEY
+        string "Controller public key"
+        default ""
+        help
+            The owning agent's controller key: 43 characters of unpadded base64url.
+
+    config ADP_ASSIGNED_AGENT
+        string "Owning agent's full AMP address"
+        default ""
+        help
+            For example assistant@acme.aimaestro.local.
+
+    config ADP_DISPLAY_TEXT
+        bool "Offer display.text (needs adp_board_show_text from your board port)"
+        default n
+        help
+            Turn on only when the board has a screen and you have written
+            adp_board_show_text() for it. Turning it on is the owner's local
+            grant for display.text.
+
+endmenu
