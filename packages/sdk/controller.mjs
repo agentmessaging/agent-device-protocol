@@ -438,7 +438,7 @@ export class Controller {
             source: "voice",
           });
       },
-      onInput: async (key, text) => {
+      onInput: async (key, text, { via } = {}) => {
         const route = this.route(key);
         if (!route) throw new Error("Unknown device");
         await this.refresh(route.agent.address, key);
@@ -446,6 +446,7 @@ export class Controller {
         this.notify("device.input", route.agent, route.device, {
           text,
           source: "device",
+          ...(via ? { via } : {}),
         });
       },
     });
