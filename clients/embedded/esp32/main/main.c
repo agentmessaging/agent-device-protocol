@@ -31,7 +31,7 @@ typedef struct {
 static QueueHandle_t frames;
 static EventGroupHandle_t wifi;
 static char *rx;
-static volatile int64_t last_rx;
+static volatile uint32_t last_rx;  // 32 bits: one store, so the main task never reads half of it
 static volatile int http_status;
 static char refusal[32];
 
@@ -96,10 +96,14 @@ static void on_ws(void *arg, esp_event_base_t base, int32_t id, void *event) {
   esp_websocket_event_data_t *d = event;
   frame_t end = {0};
   if (id == WEBSOCKET_EVENT_DATA) {
-    last_rx = now_ms();  // any frame, pings included, shows the controller is there
+    last_rx = (uint32_t)now_ms();  // any frame, pings included, shows the controller is there
     if (d->op_code == 0x8 && d->data_len > 2 && ((uint8_t)d->data_ptr[0] << 8 | (uint8_t)d->data_ptr[1]) == 4003)
       snprintf(refusal, sizeof refusal, "%.*s", d->data_len - 2, d->data_ptr + 2);
-    if (d->op_code != 0x1 || d->payload_len > ADP_MAX_FRAME) return;  // oversized frames are dropped
+    if (d->op_code != 0x1) return;
+    if (d->payload_len > ADP_MAX_FRAME) {
+      if (d->payload_offset == 0) ESP_LOGW(TAG, "Dropped a %d-byte frame (limit %d)", d->payload_len, ADP_MAX_FRAME);
+      return;
+    }
     if (d->payload_offset == 0) {
       free(rx);
       rx = malloc(d->payload_len + 1);
@@ -109,7 +113,10 @@ static void on_ws(void *arg, esp_event_base_t base, int32_t id, void *event) {
     if (d->payload_offset + d->data_len < d->payload_len) return;
     frame_t f = {rx, d->payload_len};
     rx = NULL;
-    if (xQueueSend(frames, &f, 0) != pdTRUE) free(f.data);
+    if (xQueueSend(frames, &f, 0) != pdTRUE) {
+      ESP_LOGW(TAG, "Dropped a frame: the queue is full");
+      free(f.data);
+    }
   } else if (id == WEBSOCKET_EVENT_ERROR) {
     http_status = d->error_handle.esp_ws_handshake_status_code;
   } else if (id == WEBSOCKET_EVENT_DISCONNECTED || id == WEBSOCKET_EVENT_CLOSED) {
@@ -132,7 +139,8 @@ static bool session(adp_t *adp, const char *uri) {
   adp_new_session(adp);
   refusal[0] = 0;
   http_status = 0;
-  int64_t opened = last_rx = now_ms();
+  int64_t opened = now_ms();
+  last_rx = (uint32_t)opened;
   esp_websocket_client_start(client);
   for (;;) {
     frame_t f;
@@ -147,7 +155,8 @@ static bool session(adp_t *adp, const char *uri) {
       if (was < 2 && adp->state == 2) ESP_LOGI(TAG, "Connected to the controller for %s", adp->agent);
     }
     if (adp->state < 2 && now_ms() - opened > 5000) break;  // handshake bound
-    if (now_ms() - last_rx > 35000) break;                  // controller went silent
+    uint32_t seen = last_rx;  // read before the clock, so a newer frame can't make the difference wrap
+    if ((uint32_t)now_ms() - seen > 35000) break;  // controller went silent
   }
   esp_websocket_client_destroy(client);
   frame_t f;
@@ -164,6 +173,7 @@ void app_main(void) {
   }
   esp_err_t err = nvs_flash_init();  // with CONFIG_NVS_ENCRYPTION this opens the encrypted partition
   if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    ESP_LOGW(TAG, "Erasing NVS: the device key is lost and the device must be paired again");
     ESP_ERROR_CHECK(nvs_flash_erase());
     err = nvs_flash_init();
   }
