@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { execFileSync, spawn } from "node:child_process";
-import { createPrivateKey } from "node:crypto";
+import { createPrivateKey, sign } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -125,4 +125,38 @@ test("the hub refuses the C core when it names another agent", { skip }, async (
   const [code, reason] = await once(s.ws, "close");
   assert.equal(code, 4003);
   assert.equal(reason.toString(), "not_owner");
+});
+
+test("the C core refuses signed bodies a JS verifier would read differently, and replayed acks", { skip }, async (t) => {
+  const owner = identity(), deviceKey = run(["key", SEED]);
+  const child = spawn(bin, ["bridge", SEED, owner.key, AGENT, "display"]);
+  t.after(() => child.kill());
+  const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
+  const send = (frame) => child.stdin.write(JSON.stringify(frame) + "\n");
+  const ask = async (frame) => {
+    send(frame);
+    return JSON.parse((await lines.next()).value);
+  };
+  // The owner's signature over exact bytes, as seal() would, but over text seal() never makes
+  const raw = (text) => {
+    const bytes = Buffer.from(text);
+    const signature = sign(null, Buffer.concat([Buffer.from("ai-maestro-device/1\0"), bytes]), createPrivateKey(owner.secret));
+    return { body: bytes.toString("base64url"), signature: signature.toString("base64url") };
+  };
+  const proof = open(await ask({ type: "hello", challenge: "d".repeat(48) }), deviceKey);
+  const connected = seal({ type: "connected", id: proof.id, challenge: proof.challenge, to: deviceKey, deviceChallenge: proof.deviceChallenge }, owner.secret);
+  send(connected);
+  const challenge = async () => (await ask({ type: "rpc", id: "1".repeat(48), method: "challenge" })).body.challenge;
+  const request = async (text) => ask({ type: "rpc", id: "2".repeat(48), method: "request", body: raw(text) });
+  let c = await challenge();
+  assert.equal((await request(JSON.stringify({ type: "discover", id: "c".repeat(48), challenge: c, to: deviceKey }) + "GARBAGE")).status, 403);
+  c = await challenge();
+  assert.equal((await request(JSON.stringify({ type: "discover", id: "c".repeat(48), challenge: c, to: deviceKey }) + "\n")).status, 200);
+  c = await challenge();
+  const twice = `{"type":"invoke","id":"${"c".repeat(48)}","challenge":"${c}","to":"${deviceKey}","capability":"display.text","args":{"text":"A"},"capability":"device.health"}`;
+  assert.equal((await request(twice)).status, 403);
+  // A replayed connected is not an event.ack: the device ends the connection
+  send(connected);
+  const [code] = await once(child, "exit");
+  assert.notEqual(code, 0);
 });

@@ -89,6 +89,31 @@ static cJSON *seal_obj(adp_t *adp, cJSON *data) {
   return o;
 }
 
+// JSON.parse keeps the last of two equal keys and cJSON the first, so a body with one would mean
+// different things to this device and to a JS verifier of the same bytes: refuse it.
+static bool unique_keys(const cJSON *o) {
+  for (const cJSON *a = o ? o->child : NULL; a; a = a->next) {
+    if (cJSON_IsObject(o))
+      for (const cJSON *b = a->next; b; b = b->next)
+        if (!strcmp(a->string, b->string)) return false;
+    if ((cJSON_IsObject(a) || cJSON_IsArray(a)) && !unique_keys(a)) return false;
+  }
+  return true;
+}
+
+// The whole body is one JSON value: anything after it but whitespace is a malformed packet.
+static cJSON *parse_exact(const char *text, size_t n) {
+  const char *end = NULL;
+  cJSON *o = cJSON_ParseWithLengthOpts(text, n, &end, false);
+  if (o && end)
+    while (end < text + n && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r')) end++;
+  if (!o || end != text + n || !unique_keys(o)) {
+    cJSON_Delete(o);
+    return NULL;
+  }
+  return o;
+}
+
 // Verifies the body bytes before parsing them. Returns NULL on any failure.
 static cJSON *open_packet(const cJSON *packet, const unsigned char pk[32]) {
   const cJSON *b = field(packet, "body"), *s = field(packet, "signature");
@@ -104,7 +129,7 @@ static cJSON *open_packet(const cJSON *packet, const unsigned char pk[32]) {
   cJSON *out = NULL;
   if (!sodium_base642bin(msg + DOMAIN_LEN, blen, b->valuestring, blen, NULL, &n, NULL, B64) &&
       !crypto_sign_verify_detached(sig, msg, DOMAIN_LEN + n, pk))
-    out = cJSON_ParseWithLength((const char *)msg + DOMAIN_LEN, n);
+    out = parse_exact((const char *)msg + DOMAIN_LEN, n);
   free(msg);
   return out;
 }
@@ -306,9 +331,9 @@ int adp_handle(adp_t *adp, const char *frame, size_t len, int64_t now, char **ou
     }
     cJSON_Delete(a);
   } else if (field(m, "body") && field(m, "signature")) {
-    // An event.ack. This client sends no events yet, but a forged packet still ends the connection.
+    // An event.ack. This client sends no events yet, but a forged or replayed packet still ends the connection.
     cJSON *a = open_packet(m, adp->owner_pk);
-    rc = a ? 0 : -1;
+    rc = is(field(a, "type"), "event.ack") && is(field(a, "to"), adp->key) ? 0 : -1;
     cJSON_Delete(a);
   } else if (is(type, "event.challenge") || is(type, "cancel")) {
     rc = 0;  // no events to send; calls are answered before the next frame, so nothing is left to cancel
