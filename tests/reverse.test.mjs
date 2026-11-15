@@ -248,6 +248,17 @@ test("signed input activates an idle device and is delivered only to its assigne
     connections[1].connection.input("x".repeat(4097)),
     /4096/,
   );
+  // A voice assistant relayed the words: the controller passes its name on
+  await waitFor(() => connections[1].connection.eventChallenge);
+  await connections[1].connection.input("What is on today?", { via: "siri" });
+  const relayed = events.filter((e) => e.type === "device.input").at(-1);
+  assert.equal(relayed.text, "What is on today?");
+  assert.equal(relayed.via, "siri");
+  assert.equal(input.via, undefined);
+  await assert.rejects(
+    connections[1].connection.input("hi", { via: "Siri <b>" }),
+    /via/,
+  );
 });
 
 test("a locally approved transfer delivers its signed receipt before closing the former connection", async (t) => {

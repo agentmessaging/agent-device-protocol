@@ -28,7 +28,7 @@ export async function listen(origin) {
       receipts[event.requestId] = { ...event, deviceKey: key };
       state.write("proposal-results.json", receipts);
     },
-    onInput: async (key, text) => {
+    onInput: async (key, text, { via } = {}) => {
       const c = config(),
         d = Object.values(c.devices).find((d) => d.key === key);
       if (!d) throw new Error("Unknown device");
@@ -43,6 +43,7 @@ export async function listen(origin) {
         deviceKey: key,
         text,
         source: "device",
+        ...(via ? { via } : {}),
       });
       state.write("input-events.json", queue);
     },

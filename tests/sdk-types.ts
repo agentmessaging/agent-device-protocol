@@ -34,4 +34,5 @@ const bridge = new DeviceConnection({
   adapter: async () => ({ status: 200, body: {} }),
 });
 void bridge.input("hello");
+void bridge.input("hello", { via: "siri" });
 void bridge.stop();

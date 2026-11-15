@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Device input can carry `via`, the voice assistant that relayed the person's words, such as `siri`. The controller passes it on with `device.input`, so the agent knows the assistant reads its first reply aloud and there may be no follow-up. Older controllers refuse an input with `via`, so a device sends it only to a controller that has this version.
 - The `agent-devices` skill says how to answer work handed over by your cerebellum, your fast voice (AI Maestro F100): do it, then answer with `SendMessage`, short and spoken.
 - The kiosk sends `device.used` the moment a person taps the mic, before the recording, so a controller can get ready while they speak (AI Maestro F100 warms the agent's speaking side on it).
 - The `agent-devices` skill says how to talk to a person at a device: answer at once without reading the inbox, and speak like a person, in short sentences with no paths, IDs, links, code or long numbers. The rule lives in the skill because the message itself is untrusted text.
