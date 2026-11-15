@@ -19,3 +19,7 @@ Measured the display page: no leak reproduced in headless Chrome on macOS. Bound
 ## [2026-11-06] feature | Kiosk redesign
 
 Built the owner's approved kiosk design as the real page, with [F005](backlog/F005-kiosk-redesign.md): tap to talk that silences the agent, real levels, four grant switches, a local camera preview, and a local stop that covers every grant, including `camera`. Tested with fake hardware and in a browser against a simulated bridge; physical-device acceptance and a soak with the preview remain open. [B001](backlog/B001-kiosk-memory-growth.md) stays open.
+
+## [2026-11-13] feature | ESP32 client
+
+Added the ESP32 client in `clients/embedded/esp32` with [F006](backlog/F006-esp32-client.md): ESP-IDF firmware, outbound WebSocket, device key in NVS, `device.health` and optional `display.text`. Its C protocol core, compiled for the host, passes `tests/esp32-client.test.mjs` against the SDK signer and hub. No ESP-IDF toolchain was available, so the firmware was not compiled, and no board was used. Open protocol questions are in the client README; `protocol/` is unchanged.

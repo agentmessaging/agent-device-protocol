@@ -54,7 +54,7 @@ Devices either answer on HTTP or open their own connection to the controller ([p
 - Controller role, SDK, Linux device bridge, typed capabilities, device-opened connections, local approvals and the conformance suite are in place.
 - [AI Maestro](https://github.com/23blocks-OS/ai-maestro) is implementing the controller role directly in its server, and passes the conformance suite.
 - Hardware acceptance on real camera and audio devices is in progress. Live media over device-opened connections is not done yet.
-- macOS, mobile and embedded devices are future work.
+- macOS and mobile devices are future work. An experimental [ESP32 client](clients/embedded/esp32) answers health and text; it is not yet tested on a board.
 
 **A note on the name.** The protocol began inside AI Maestro, so the signature domain is still `ai-maestro-device/1` and the SDK package is `@ai-maestro/device-sdk`. The signature domain is part of the wire format: changing it would break every signature, so it stays for v1.
 
