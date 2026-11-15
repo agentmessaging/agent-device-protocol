@@ -70,7 +70,7 @@ The text is up to 4096 bytes of UTF-8 and is literal text, never markup. Without
 
 ## Limits
 
-- **Transport.** The board connects with plain `ws://`. The protocol profile expects Tailscale to encrypt this link, and a board cannot run Tailscale. Every request and answer is still signed and uses one-use challenges, so no one on the network can act as the controller or the device, but people on the same network can read what is sent (for example, text for the screen). The reference listener binds only loopback and Tailscale addresses, so the board also needs a network route to that address. This is open question 1 below.
+- **Transport.** The board connects with plain `ws://`, because a board cannot run Tailscale. [reverse.md, Home network connections](../../../protocol/reverse.md#home-network-connections) allows this for `device.health` and `display.text` only, which is all this board offers. Every request and answer is still signed and uses one-use challenges, so no one on the network can act as the controller or the device, but people on the same network can read the screen text. The reference listener binds only loopback and Tailscale addresses, so the board also needs a network route to that address.
 - **Frame size.** Frames larger than 16 KiB are dropped. The controller then waits 15 seconds for the call to time out.
 - **Memory.** At most 8 outstanding challenges (the HTTP profile allows 512), one call at a time, and each call is answered before the next frame is read.
 - **Ownership.** Owner and agent come from the flashed config. A transfer means flashing new config. `revision` is a new random value on each boot.
@@ -80,7 +80,7 @@ The text is up to 4096 bytes of UTF-8 and is literal text, never markup. Without
 
 These are written down here rather than changed in `protocol/`:
 
-1. **Transport for boards without Tailscale.** Should the profile allow a private LAN address, or `wss://` with a pinned certificate, for devices that cannot join a tailnet? Today the board's link is signed but not encrypted.
+1. **Encrypted transport for boards without Tailscale.** The profile now allows a private network address with limits. Encryption keyed from the pinned keys (libsodium is already on the board) would lift those limits.
 2. **Device size limits.** There is no field for a device to say how large a request it accepts. Should `register` carry a limit (for example `maxRequestBytes`) so a controller can refuse early instead of timing out?
 3. **Refusal header.** `esp_websocket_client` gives the HTTP status of a refused upgrade but not the `X-ADP-Refusal` header. The board treats HTTP 403 as `unknown_device` (final) and any other status as temporary. Should the status alone be enough?
 4. **Revision without local approval.** `revision` is described for locally approved changes. What should a device that has no proposals and no persistent revision send?
