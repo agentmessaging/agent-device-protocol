@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `transcribe` may return `{ text, speaker }`. The controller adds a valid `speaker` (`{id, name, confidence}`, the host's own voice match) to `device.input` from audio, as a guess for context, never proof. An invalid one is dropped. A plain string works as before.
 - The device-initiated profile allows a private network address for devices that cannot join a tailnet, such as the ESP32 board. That connection is not encrypted, so it carries only `device.health` and `display.text`; the controller refuses everything else and closes on `input` or `audio`. Accepting these connections is optional, and the reference listener still binds only loopback and Tailscale.
 - ESP32 client: it logs a frame it drops (over 16 KiB, or the queue full) and an NVS erase that loses the device key, instead of staying silent. The controller-silence timer is 32 bits, so the main task can't read it half-written.
 - ESP32 client (experimental, `clients/embedded/esp32`): ESP-IDF firmware that connects out to its controller over Wi-Fi, keeps its Ed25519 key in NVS (encrypted on S2, S3, C3 and C6), and answers `device.health` and, with a board screen, `display.text`. Its protocol core is tested against the SDK on a computer; the firmware is not yet tested on a board.
