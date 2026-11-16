@@ -20,6 +20,8 @@ c.pinDevice("lola@host.local", {
   endpoint: { reverse: "http://127.0.0.1:23112" },
 });
 const hub = c.createHub();
+c.createHub({ transcribe: async () => ({ text: "hi", speaker: { id: "p_1", name: "Acme", confidence: 0.8 } }) });
+c.createHub({ transcribe: () => "hi" });
 hub.server.listen(23112, "127.0.0.1");
 const snapshot: ControllerSnapshot = c.snapshot();
 void snapshot;
