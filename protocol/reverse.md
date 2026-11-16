@@ -1,8 +1,22 @@
 # Device-initiated connection profile
 
-This extends [v1](v1.md). An owned device opens a WebSocket directly to its controller at `ws://TAILNET_IPV4:PORT/v1/connect/DEVICE_KEY`. Loopback is also allowed for local tests. Public origins, DNS names, redirects and cloud relays are outside this profile. Tailscale supplies encryption; every authority-bearing message still uses the v1 Ed25519 domain and pinned keys.
+This extends [v1](v1.md). An owned device opens a WebSocket directly to its controller at `ws://TAILNET_IPV4:PORT/v1/connect/DEVICE_KEY`. Loopback is also allowed for local tests, and a private network address for devices that cannot join a tailnet (see [Home network connections](#home-network-connections)). Public origins, DNS names, redirects and cloud relays are outside this profile. Tailscale supplies encryption; every authority-bearing message still uses the v1 Ed25519 domain and pinned keys.
 
 A controller refuses a connection whose `Origin` is a web page's. It accepts no `Origin`, and its own origin: phone socket libraries always send the origin of the address they connect to, and cannot remove it.
+
+## Home network connections
+
+Some devices, such as microcontroller boards, cannot run Tailscale. Such a device MAY connect to its controller at a private IPv4 address (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`). A controller MAY accept these connections; it is not required to.
+
+Nothing encrypts this connection. The signatures, pinned keys and one-use challenges still apply, so no one on the network can act as the controller or the device, or replay a request. But anyone on the same network can read what is sent, and can delay or drop it. A device also cannot tell its owner's network from another network that uses the same addresses.
+
+So a home network connection carries only data that is safe to read:
+
+- The controller MUST NOT invoke any capability except `device.health` and `display.text` over it. Anything else, such as a microphone, camera, snapshot, speech or image, is refused with signed `denied`.
+- The controller MUST refuse `input` and `audio` events over it, and close the connection. `device.used` is allowed.
+- The controller decides by the address the connection came from, not by what the device claims.
+
+An encrypted home network connection, keyed from the pinned device and controller keys, is planned. Until it exists, these limits apply to every connection from a private address.
 
 ## Authentication and lifecycle
 

@@ -81,7 +81,7 @@ static void device_key(unsigned char sk[64]) {
 #endif
 }
 
-// protocol/reverse.md allows Tailscale and loopback addresses; a board on a home LAN also needs private ones.
+// protocol/reverse.md allows Tailscale, loopback and, with limits, private network addresses (Home network connections).
 static bool private_url(const char *url) {
   unsigned a, b, c, d, port;
   char rest;
