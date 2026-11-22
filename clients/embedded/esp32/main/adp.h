@@ -22,6 +22,8 @@ typedef struct {
   // display.text, advertised only when set. Returns 0 when shown.
   int (*show_text)(const char *text, void *user);
   void *user;
+  // S003: connect through /v1/secure and refuse anything that is not encrypted
+  bool secure;
   // session
   int state;  // 0 waiting for hello, 1 connect sent, 2 authenticated
   char hs_id[ADP_HEX], hs_challenge[ADP_HEX], hs_device_challenge[ADP_HEX];
@@ -29,6 +31,10 @@ typedef struct {
     char value[ADP_HEX];
     int64_t until;
   } challenges[ADP_CHALLENGES];
+  // S003 session: 0 waiting for secure.hello, 1 encrypted
+  int sec_state;
+  unsigned char sec_tx[32], sec_rx[32];  // device-to-controller and controller-to-device keys
+  uint64_t sec_tx_n, sec_rx_n;            // implicit per-direction message counters
 } adp_t;
 
 // Returns 0, or -1 for a bad owner key or agent address. Needs sodium_init() first.
@@ -43,3 +49,14 @@ int adp_handle(adp_t *adp, const char *frame, size_t len, int64_t now_ms, char *
 char *adp_seal(const unsigned char sk[64], const char *body, size_t len);
 // Unpadded base64url of the public key in sk.
 void adp_public_key(const unsigned char sk[64], char out[ADP_KEY]);
+// One WebSocket message in, text or binary. Without adp->secure it is adp_handle(). With it, the first
+// message must be the text secure.hello and every later one binary (S003). *out is NULL or a malloc'd
+// message to send, with its length and kind. Returns -1 when the connection must be closed.
+int adp_receive(adp_t *adp, const unsigned char *data, size_t len, bool binary, int64_t now_ms,
+                unsigned char **out, size_t *out_len, bool *out_binary);
+// S003 key schedule: both direction keys from the X25519 result and the decoded hello and accept bodies.
+void adp_secure_keys(const unsigned char shared[32], const unsigned char *hello, size_t hello_len,
+                     const unsigned char *accept, size_t accept_len, unsigned char controller_to_device[32],
+                     unsigned char device_to_controller[32]);
+// Encrypts one message with the next sending counter: ciphertext then 16-byte tag, malloc'd.
+int adp_secure_seal(adp_t *adp, const unsigned char *in, size_t len, unsigned char **out, size_t *out_len);

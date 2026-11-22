@@ -32,3 +32,6 @@ Wrote [S003](specs/S003-encrypted-home-network-connection.md), proposed: a `/v1/
 
 Implemented [S003](specs/S003-encrypted-home-network-connection.md) in the SDK with [F007](backlog/F007-encrypted-home-network-connection.md) and moved the contract into `protocol/reverse.md`. The hub now also enforces the home network limits on plain connections from private addresses, which reverse.md required but the SDK did not check. Tested on one computer with simulated home addresses; no board was used. [F008](backlog/F008-esp32-eyes-and-ears.md) (the ESP32 side) remains proposed.
 
+## [2026-11-22] feature | S003 in the ESP32 C core
+
+Added the S003 encrypted connection to the ESP32 C core for [F008](backlog/F008-esp32-eyes-and-ears.md): `adp_receive()`, the signed X25519 key exchange, HKDF-SHA256 keys and ChaCha20-Poly1305 messages with implicit counters, all with libsodium. The host build passes the S003 test vectors and connects to the SDK hub through `/v1/secure`. Not compiled with ESP-IDF, no board used, and the firmware does not call it yet.

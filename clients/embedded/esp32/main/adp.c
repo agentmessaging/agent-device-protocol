@@ -114,8 +114,9 @@ static cJSON *parse_exact(const char *text, size_t n) {
   return o;
 }
 
-// Verifies the body bytes before parsing them. Returns NULL on any failure.
-static cJSON *open_packet(const cJSON *packet, const unsigned char pk[32]) {
+// Verifies the body bytes before parsing them. Returns NULL on any failure. With raw, also a malloc'd
+// copy of the verified body bytes (the S003 transcript needs them exactly).
+static cJSON *open_packet_raw(const cJSON *packet, const unsigned char pk[32], unsigned char **raw, size_t *raw_len) {
   const cJSON *b = field(packet, "body"), *s = field(packet, "signature");
   if (!cJSON_IsString(b) || !cJSON_IsString(s)) return NULL;
   size_t blen = strlen(b->valuestring), n = 0, slen = 0;
@@ -130,9 +131,20 @@ static cJSON *open_packet(const cJSON *packet, const unsigned char pk[32]) {
   if (!sodium_base642bin(msg + DOMAIN_LEN, blen, b->valuestring, blen, NULL, &n, NULL, B64) &&
       !crypto_sign_verify_detached(sig, msg, DOMAIN_LEN + n, pk))
     out = parse_exact((const char *)msg + DOMAIN_LEN, n);
+  if (out && raw) {
+    *raw = malloc(n ? n : 1);
+    *raw_len = n;
+    if (*raw) memcpy(*raw, msg + DOMAIN_LEN, n);
+    else {
+      cJSON_Delete(out);
+      out = NULL;
+    }
+  }
   free(msg);
   return out;
 }
+
+static cJSON *open_packet(const cJSON *packet, const unsigned char pk[32]) { return open_packet_raw(packet, pk, NULL, NULL); }
 
 int adp_init(adp_t *adp, const unsigned char sk[64], const char *owner_key, const char *agent,
              const char *platform) {
@@ -150,7 +162,13 @@ int adp_init(adp_t *adp, const unsigned char sk[64], const char *owner_key, cons
   return 0;
 }
 
-void adp_new_session(adp_t *adp) { adp->state = 0; }
+void adp_new_session(adp_t *adp) {
+  adp->state = 0;
+  adp->sec_state = 0;
+  adp->sec_tx_n = adp->sec_rx_n = 0;
+  sodium_memzero(adp->sec_tx, sizeof adp->sec_tx);
+  sodium_memzero(adp->sec_rx, sizeof adp->sec_rx);
+}
 
 static cJSON *error_body(const char *e) {
   cJSON *o = cJSON_CreateObject();
@@ -355,5 +373,151 @@ int adp_handle(adp_t *adp, const char *frame, size_t len, int64_t now, char **ou
     }
   }
   cJSON_Delete(m);
+  return rc;
+}
+
+// ---- S003, encrypted home network connection (docs/wiki/specs/S003-encrypted-home-network-connection.md)
+
+static const char SECURE_LABEL[] = "adp-secure/1";  // the transcript hashes it with its NUL
+#define SECURE_TAG crypto_aead_chacha20poly1305_ietf_ABYTES
+#define SECURE_MAX_COUNTER (1ULL << 32)
+
+static void hmac(unsigned char out[32], const unsigned char *key, size_t key_len, const unsigned char *a, size_t a_len,
+                 const unsigned char *b, size_t b_len) {
+  crypto_auth_hmacsha256_state st;
+  crypto_auth_hmacsha256_init(&st, key, key_len);
+  crypto_auth_hmacsha256_update(&st, a, a_len);
+  if (b_len) crypto_auth_hmacsha256_update(&st, b, b_len);
+  crypto_auth_hmacsha256_final(&st, out);
+  sodium_memzero(&st, sizeof st);
+}
+
+void adp_secure_keys(const unsigned char shared[32], const unsigned char *hello, size_t hello_len,
+                     const unsigned char *accept, size_t accept_len, unsigned char c2d[32], unsigned char d2c[32]) {
+  unsigned char transcript[32], prk[32];
+  crypto_hash_sha256_state h;
+  crypto_hash_sha256_init(&h);
+  crypto_hash_sha256_update(&h, (const unsigned char *)SECURE_LABEL, sizeof SECURE_LABEL);
+  crypto_hash_sha256_update(&h, hello, hello_len);
+  crypto_hash_sha256_update(&h, accept, accept_len);
+  crypto_hash_sha256_final(&h, transcript);
+  // HKDF-SHA256 (RFC 5869): extract with the transcript as salt, then one 32-byte expand block per direction
+  hmac(prk, transcript, 32, shared, 32, NULL, 0);
+  static const unsigned char one = 1;
+  static const char c2d_info[] = "adp-secure/1 controller-to-device", d2c_info[] = "adp-secure/1 device-to-controller";
+  hmac(c2d, prk, 32, (const unsigned char *)c2d_info, sizeof c2d_info - 1, &one, 1);
+  hmac(d2c, prk, 32, (const unsigned char *)d2c_info, sizeof d2c_info - 1, &one, 1);
+  sodium_memzero(prk, sizeof prk);
+}
+
+static void secure_nonce(unsigned char n[crypto_aead_chacha20poly1305_ietf_NPUBBYTES], uint64_t counter) {
+  memset(n, 0, 4);
+  for (int i = 0; i < 8; i++) n[4 + i] = (unsigned char)(counter >> (56 - 8 * i));
+}
+
+int adp_secure_seal(adp_t *adp, const unsigned char *in, size_t len, unsigned char **out, size_t *out_len) {
+  unsigned char n[crypto_aead_chacha20poly1305_ietf_NPUBBYTES];
+  unsigned long long clen = 0;
+  *out = NULL;
+  // After 2^32 messages the sender closes; the device reconnects with a new key exchange
+  if (adp->sec_tx_n >= SECURE_MAX_COUNTER || !(*out = malloc(len + SECURE_TAG))) return -1;
+  secure_nonce(n, adp->sec_tx_n++);
+  crypto_aead_chacha20poly1305_ietf_encrypt(*out, &clen, in, len, NULL, 0, NULL, n, adp->sec_tx);
+  *out_len = (size_t)clen;
+  return 0;
+}
+
+// Decrypts with the next expected counter, so a changed, replayed, dropped or reordered message fails.
+static int secure_open(adp_t *adp, const unsigned char *in, size_t len, char **out, size_t *out_len) {
+  unsigned char n[crypto_aead_chacha20poly1305_ietf_NPUBBYTES];
+  unsigned long long mlen = 0;
+  *out = NULL;
+  // The device's frame limit (ADP_MAX_FRAME) is below the profile's 2,200,000 bytes, so it also bounds this
+  if (len < SECURE_TAG || len - SECURE_TAG > ADP_MAX_FRAME || adp->sec_rx_n >= SECURE_MAX_COUNTER) return -1;
+  if (!(*out = malloc(len - SECURE_TAG + 1))) return -1;
+  secure_nonce(n, adp->sec_rx_n);
+  if (crypto_aead_chacha20poly1305_ietf_decrypt((unsigned char *)*out, &mlen, NULL, in, len, NULL, 0, n, adp->sec_rx)) {
+    free(*out);
+    *out = NULL;
+    return -1;
+  }
+  adp->sec_rx_n++;
+  (*out)[mlen] = 0;
+  *out_len = (size_t)mlen;
+  return 0;
+}
+
+// S003 step 2: verify the controller's signed secure.hello with the pinned key, answer with a signed
+// secure.accept carrying a new X25519 key, and derive both direction keys.
+static int secure_accept(adp_t *adp, const char *frame, size_t len, char **out) {
+  *out = NULL;
+  if (len > ADP_MAX_FRAME) return -1;
+  int rc = -1;
+  unsigned char *hello = NULL, peer[32], sk[32], pk[32], shared[32];
+  size_t hello_len = 0;
+  cJSON *packet = cJSON_ParseWithLength(frame, len);
+  cJSON *m = cJSON_IsObject(packet) ? open_packet_raw(packet, adp->owner_pk, &hello, &hello_len) : NULL;
+  const cJSON *v = field(m, "version"), *eph = field(m, "ephemeral");
+  if (cJSON_IsObject(m) && cJSON_GetArraySize(m) == 6 && is(field(m, "type"), "secure.hello") && cJSON_IsNumber(v) &&
+      v->valuedouble == 1 && is(field(m, "to"), adp->key) && hex48(field(m, "id")) && hex48(field(m, "challenge")) &&
+      cJSON_IsString(eph) && !decode_key(eph->valuestring, peer)) {
+    char mine[ADP_KEY];
+    randombytes_buf(sk, sizeof sk);
+    crypto_scalarmult_base(pk, sk);
+    sodium_bin2base64(mine, ADP_KEY, pk, 32, B64);
+    cJSON *a = cJSON_CreateObject();
+    cJSON_AddStringToObject(a, "type", "secure.accept");
+    cJSON_AddNumberToObject(a, "version", 1);
+    cJSON_AddStringToObject(a, "id", field(m, "id")->valuestring);
+    cJSON_AddStringToObject(a, "challenge", field(m, "challenge")->valuestring);
+    cJSON_AddStringToObject(a, "to", adp->owner_key);
+    cJSON_AddStringToObject(a, "assignedAgent", adp->agent);
+    cJSON_AddStringToObject(a, "ephemeral", mine);
+    cJSON_AddStringToObject(a, "peerEphemeral", eph->valuestring);
+    char *body = cJSON_PrintUnformatted(a);
+    cJSON_Delete(a);
+    // crypto_scalarmult fails on an all-zero result, which closes the connection
+    if (body && !crypto_scalarmult(shared, sk, peer) && (*out = adp_seal(adp->sk, body, strlen(body)))) {
+      adp_secure_keys(shared, hello, hello_len, (const unsigned char *)body, strlen(body), adp->sec_rx, adp->sec_tx);
+      adp->sec_tx_n = adp->sec_rx_n = 0;
+      adp->sec_state = 1;
+      rc = 0;
+    }
+    free(body);
+    sodium_memzero(sk, sizeof sk);
+    sodium_memzero(shared, sizeof shared);
+  }
+  free(hello);
+  cJSON_Delete(m);
+  cJSON_Delete(packet);
+  return rc;
+}
+
+int adp_receive(adp_t *adp, const unsigned char *data, size_t len, bool binary, int64_t now, unsigned char **out,
+                size_t *out_len, bool *out_binary) {
+  char *text = NULL, *reply = NULL;
+  size_t text_len = 0;
+  *out = NULL;
+  *out_len = 0;
+  *out_binary = adp->secure;
+  if (!adp->secure) {
+    if (binary || adp_handle(adp, (const char *)data, len, now, &reply)) return -1;
+    if (reply) *out_len = strlen(reply);
+    *out = (unsigned char *)reply;
+    return 0;
+  }
+  if (adp->sec_state == 0) {
+    // The key exchange is the only plain message; the accept goes back as text
+    if (binary || secure_accept(adp, (const char *)data, len, &reply)) return -1;
+    *out_binary = false;
+    *out_len = strlen(reply);
+    *out = (unsigned char *)reply;
+    return 0;
+  }
+  if (!binary || secure_open(adp, data, len, &text, &text_len)) return -1;
+  int rc = adp_handle(adp, text, text_len, now, &reply);
+  free(text);
+  if (!rc && reply) rc = adp_secure_seal(adp, (const unsigned char *)reply, strlen(reply), out, out_len);
+  free(reply);
   return rc;
 }

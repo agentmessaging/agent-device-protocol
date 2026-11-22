@@ -5,13 +5,14 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { execFileSync, spawn } from "node:child_process";
 import { createPrivateKey, sign } from "node:crypto";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import WebSocket from "ws";
 import { identity, call, exchange, seal, open } from "../packages/sdk/index.mjs";
 import { ReverseHub } from "../packages/sdk/reverse.mjs";
+import { secureHello, secureFinish } from "../packages/sdk/secure.mjs";
 import { validateSchema } from "../packages/sdk/capabilities.mjs";
 
 const src = new URL("../clients/embedded/esp32/", import.meta.url).pathname;
@@ -43,20 +44,23 @@ test("the C core signs byte for byte like the SDK", { skip }, () => {
   assert.deepEqual(open(packet, key), body);
 });
 
-async function connect(t, { agent = AGENT, pinned = AGENT, display = true } = {}) {
+async function connect(t, { agent = AGENT, pinned = AGENT, display = true, secure = false, isHome } = {}) {
   const owner = identity();
   const deviceKey = run(["key", SEED]);
-  const hub = new ReverseHub({ identity: owner, getDevices: () => ({ [deviceKey]: { agent: pinned } }) });
+  const hub = new ReverseHub({ identity: owner, getDevices: () => ({ [deviceKey]: { agent: pinned } }), ...(isHome ? { isHome } : {}) });
   hub.server.listen(0, "127.0.0.1");
   await once(hub.server, "listening");
   const origin = "http://127.0.0.1:" + hub.server.address().port;
-  const child = spawn(bin, ["bridge", SEED, owner.key, agent, ...(display ? ["display"] : [])]);
+  const child = spawn(bin, ["bridge", SEED, owner.key, agent, ...(display ? ["display"] : []), ...(secure ? ["secure"] : [])]);
   const shown = [];
   createInterface({ input: child.stderr }).on("line", (l) => shown.push(l));
-  // Stands in for the ESP32's Wi-Fi and WebSocket: one frame per line each way
-  const ws = new WebSocket(origin.replace("http:", "ws:") + "/v1/connect/" + deviceKey);
-  ws.on("message", (data) => child.stdin.write(data.toString() + "\n"));
-  createInterface({ input: child.stdout }).on("line", (l) => ws.readyState === WebSocket.OPEN && ws.send(l));
+  // Stands in for the ESP32's Wi-Fi and WebSocket: one frame per line each way ("T text" or "B hex" when secure)
+  const ws = new WebSocket(origin.replace("http:", "ws:") + (secure ? "/v1/secure/" : "/v1/connect/") + deviceKey);
+  ws.on("message", (data, isBinary) =>
+    child.stdin.write((secure ? (isBinary ? "B " + data.toString("hex") : "T " + data.toString()) : data.toString()) + "\n"),
+  );
+  const forward = (l) => (!secure ? l : l.startsWith("B ") ? Buffer.from(l.slice(2), "hex") : l.slice(2));
+  createInterface({ input: child.stdout }).on("line", (l) => ws.readyState === WebSocket.OPEN && ws.send(forward(l)));
   ws.on("error", () => {});
   child.on("exit", () => ws.terminate());
   t.after(async () => {
@@ -159,4 +163,97 @@ test("the C core refuses signed bodies a JS verifier would read differently, and
   send(connected);
   const [code] = await once(child, "exit");
   assert.notEqual(code, 0);
+});
+
+// S003: the encrypted home network connection in the C core
+
+test("the C core gives the published S003 test vectors", { skip }, () => {
+  const v = JSON.parse(readFileSync(new URL("./vectors/secure-v1.json", import.meta.url)));
+  assert.equal(run(["x25519", v.controllerEphemeralSecret]), v.controllerEphemeral);
+  assert.equal(run(["x25519", v.deviceEphemeralSecret]), v.deviceEphemeral);
+  const hex = (text) => Buffer.from(text).toString("hex");
+  assert.equal(run(["secure-keys", v.shared, hex(v.helloBody), hex(v.acceptBody)]), v.controllerToDevice + " " + v.deviceToController);
+  assert.equal(run(["secure-seal", v.controllerToDevice], v.firstPlaintext), v.firstCiphertext);
+});
+
+test("the C core connects to the SDK hub through /v1/secure from a home network address", { skip }, async (t) => {
+  const s = await connect(t, { secure: true, isHome: () => true });
+  await once(s.hub, "connected");
+  assert.ok(s.hub.connections.get(s.deviceKey).adpChannel, "the hub side is encrypted");
+  const reg = await call(s.endpoint, s.owner, s.deviceKey);
+  assert.equal(reg.assignedAgent, AGENT);
+  assert.deepEqual((await call(s.endpoint, s.owner, s.deviceKey, "device.health")).value, { status: "ok", platform: "host" });
+  const r = await exchange(s.endpoint, s.owner, s.deviceKey, { type: "invoke", capability: "display.text", args: { text: "Hola desde casa" } }, "result");
+  assert.deepEqual(r.value, { shown: true });
+  assert.deepEqual(s.shown, ["SHOW Hola desde casa"]);
+});
+
+test("the hub refuses the C core on /v1/secure when it names another agent", { skip }, async (t) => {
+  const s = await connect(t, { secure: true, agent: "other@acme.aimaestro.local" });
+  const [code, reason] = await once(s.ws, "close");
+  assert.equal(code, 4003);
+  assert.equal(reason.toString(), "not_owner");
+});
+
+/** Drives the core's secure mode directly, as a controller would */
+function secureDevice(t, owner = identity()) {
+  const child = spawn(bin, ["bridge", SEED, owner.key, AGENT, "secure"]);
+  t.after(() => child.kill());
+  const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
+  const exited = once(child, "exit");
+  return { child, owner, deviceKey: run(["key", SEED]), next: async () => (await lines.next()).value, send: (l) => child.stdin.write(l + "\n"), exited };
+}
+
+async function established(t) {
+  const d = secureDevice(t);
+  const { packet, state } = secureHello(d.owner.secret, d.deviceKey);
+  d.send("T " + JSON.stringify(packet));
+  const accept = await d.next();
+  assert.ok(accept.startsWith("T "), "the accept is a text message");
+  const channel = secureFinish(state, JSON.parse(accept.slice(2)), { deviceKey: d.deviceKey, controllerKey: d.owner.key, assignedAgent: AGENT });
+  const sealed = (frame) => "B " + channel.seal(JSON.stringify(frame)).toString("hex");
+  return { ...d, channel, sealed };
+}
+
+test("the C core answers the profile inside the encrypted connection", { skip }, async (t) => {
+  const d = await established(t);
+  d.send(d.sealed({ type: "hello", challenge: "d".repeat(48) }));
+  const reply = await d.next();
+  assert.ok(reply.startsWith("B "), "answers are binary");
+  const proof = open(JSON.parse(d.channel.open(Buffer.from(reply.slice(2), "hex"), true)), d.deviceKey);
+  assert.equal(proof.type, "connect");
+  assert.equal(proof.assignedAgent, AGENT);
+});
+
+test("the C core refuses a hello signed by another key, a hello for another device, and a binary hello", { skip }, async (t) => {
+  for (const make of [
+    (d) => "T " + JSON.stringify(secureHello(identity().secret, d.deviceKey).packet),
+    (d) => "T " + JSON.stringify(secureHello(d.owner.secret, identity().key).packet),
+    (d) => "B " + Buffer.from(JSON.stringify(secureHello(d.owner.secret, d.deviceKey).packet)).toString("hex"),
+    (d) => "T " + JSON.stringify({ type: "hello", challenge: "d".repeat(48) }),
+  ]) {
+    const d = secureDevice(t);
+    d.send(make(d));
+    const [code] = await d.exited;
+    assert.notEqual(code, 0);
+  }
+});
+
+test("the C core closes on a changed, replayed or plain message after the key exchange", { skip }, async (t) => {
+  for (const attack of ["change", "replay", "plain", "skip"]) {
+    const d = await established(t);
+    const good = d.sealed({ type: "hello", challenge: "d".repeat(48) });
+    if (attack === "change") d.send(good.slice(0, -1) + (good.endsWith("0") ? "1" : "0"));
+    else if (attack === "replay") {
+      d.send(good);
+      await d.next();
+      d.send(good);
+    } else if (attack === "plain") d.send("T " + JSON.stringify({ type: "hello", challenge: "d".repeat(48) }));
+    else {
+      d.channel.seal("{}"); // a message the device never sees: the counters no longer match
+      d.send(d.sealed({ type: "hello", challenge: "d".repeat(48) }));
+    }
+    const [code] = await d.exited;
+    assert.notEqual(code, 0, attack);
+  }
 });
