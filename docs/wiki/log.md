@@ -47,3 +47,7 @@ Added the S003 encrypted connection to the ESP32 C core for [F008](backlog/F008-
 ## [2026-11-22] spec | S004 listening for a wake phrase
 
 Proposed [S004](specs/S004-wake-phrase-listening.md) and [F009](backlog/F009-wake-phrase-listening.md). The owner wants a board inside a toy, and the kiosks, to work without a button. S004 adds a local `listen` grant (off by default; the controller cannot turn it on), keeps listening audio in RAM only (at most 2 s, never stored or sent), requires a listening sign that is different from the recording sign, and turns a detection into the existing `audio` event with no wire change. It also adds an 8 s follow-up window after a reply and an optional `wakePhrase` register field. Design only: nothing is implemented. Source: Meta's Muse Gadgets SDK, read 2026-11-22 (opt-in "Hey Muse", off by default).
+
+## [2026-11-22] feature | ESP32 hardware doctor
+
+New `ADP_DOCTOR` build option for the XIAO ESP32-S3 Sense ([F008](backlog/F008-esp32-eyes-and-ears.md)): at boot it checks chip, PSRAM, LED, Wi-Fi, the controller address, the microphone, the speaker (a tone the microphone must hear) and the camera. On the board everything passed except the speaker, whose wiring is being checked.
