@@ -22,6 +22,10 @@
 // Supplied by your board port (see README). Returns 0 when the text is on the screen.
 int adp_board_show_text(const char *text, void *user);
 #endif
+#if CONFIG_ADP_CAMERA
+int adp_board_camera_init(void);  // board_camera.c
+int adp_board_snapshot(unsigned char **jpeg, size_t *len, void *user);
+#endif
 
 static const char *TAG = "adp";
 typedef struct {
@@ -155,10 +159,11 @@ static bool session(adp_t *adp, const char *uri) {
       int was = adp->state,
           rc = adp_receive(adp, (unsigned char *)f.data, f.len, f.binary, now_ms(), &out, &out_len, &out_binary);
       free(f.data);
+      TickType_t wait = pdMS_TO_TICKS(5000 + out_len / 50);  // a snapshot is up to 1.9 MB: allow 50 KB/s
       if (out && out_binary)
-        esp_websocket_client_send_bin(client, (const char *)out, out_len, pdMS_TO_TICKS(5000));
+        esp_websocket_client_send_bin(client, (const char *)out, out_len, wait);
       else if (out)
-        esp_websocket_client_send_text(client, (const char *)out, out_len, pdMS_TO_TICKS(5000));
+        esp_websocket_client_send_text(client, (const char *)out, out_len, wait);
       free(out);
       if (rc) break;
       if (was < 2 && adp->state == 2) ESP_LOGI(TAG, "Connected to the controller for %s", adp->agent);
@@ -206,6 +211,12 @@ void app_main(void) {
 #endif
 #if CONFIG_ADP_DISPLAY_TEXT
   adp.show_text = adp_board_show_text;
+#endif
+#if CONFIG_ADP_CAMERA
+  if (!adp.secure)
+    ESP_LOGW(TAG, "camera.snapshot needs the encrypted connection: not offered");
+  else if (!adp_board_camera_init())
+    adp.snapshot = adp_board_snapshot;
 #endif
   ESP_LOGI(TAG, "Device public key (safe to share): %s", adp.key);
 

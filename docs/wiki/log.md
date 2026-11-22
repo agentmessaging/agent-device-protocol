@@ -39,3 +39,7 @@ Added the S003 encrypted connection to the ESP32 C core for [F008](backlog/F008-
 ## [2026-11-22] feature | S003 in the ESP32 firmware, first board
 
 `main.c` connects through `/v1/secure` by default (`ADP_SECURE`) and passes text and binary frames to `adp_receive()` ([F008](backlog/F008-esp32-eyes-and-ears.md)). Compiled with ESP-IDF v5.5.6 for esp32s3 and flashed to a XIAO ESP32-S3 Sense: eFuse key, device key in encrypted NVS and Wi-Fi worked; the XIAO needs its external antenna to join. No session with a controller yet.
+
+## [2026-11-22] feature | Camera snapshot on the XIAO ESP32-S3 Sense
+
+`camera.snapshot` in the C core and the firmware ([F008](backlog/F008-esp32-eyes-and-ears.md)): offered only with the owner's camera option, the encrypted connection and a camera found at boot; the user LED is the capture sign and the camera runs only for the picture. On the board, through `/v1/secure` from a home network address to an SDK hub: discovery, health and two real 1024×768 snapshots of about 22 KB in about 2.3 s each.

@@ -1,0 +1,8 @@
+# Seeed XIAO ESP32-S3 Sense: 8 MB flash, 8 MB octal PSRAM, camera on the Sense board.
+# Use with: idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.xiao-s3-sense" set-target esp32s3
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+# Turning the camera on is the owner's local grant for camera.snapshot
+CONFIG_ADP_CAMERA=y

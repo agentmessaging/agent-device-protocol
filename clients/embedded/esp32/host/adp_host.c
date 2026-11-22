@@ -1,8 +1,9 @@
 // Runs the firmware's ADP core on a computer, for tests/esp32-client.test.mjs.
 //   adp_host key SEED_HEX                      print the public key
 //   adp_host seal SEED_HEX < body              print the signed packet for these exact body bytes
-//   adp_host bridge SEED_HEX OWNER_KEY AGENT [display] [secure]
-//       one WebSocket text frame per line on stdin and stdout; display.text goes to stderr. With secure
+//   adp_host bridge SEED_HEX OWNER_KEY AGENT [display] [camera] [secure]
+//       one WebSocket text frame per line on stdin and stdout; display.text goes to stderr; camera answers
+//       camera.snapshot with a fixed 300 KiB JPEG-shaped image. With secure
 //       (S003), each line is "T <text>" or "B <hex>" for a text or binary message.
 //   adp_host x25519 SECRET_HEX                 print the X25519 public key (S003 test vectors)
 //   adp_host secure-keys SHARED_HEX HELLO_HEX ACCEPT_HEX   print both direction keys
@@ -18,6 +19,18 @@
 static int show(const char *text, void *user) {
   (void)user;
   fprintf(stderr, "SHOW %s\n", text);
+  return 0;
+}
+
+// SOI, APP0, filler, EOI: enough for the core's signature check, and large enough to need the big-message path
+static int snapshot(unsigned char **jpeg, size_t *len, void *user) {
+  (void)user;
+  *len = 300 * 1024;
+  if (!(*jpeg = malloc(*len))) return -1;
+  for (size_t i = 0; i < *len; i++) (*jpeg)[i] = (unsigned char)(i * 7);
+  memcpy(*jpeg, "\xFF\xD8\xFF\xE0", 4);
+  (*jpeg)[*len - 2] = 0xFF;
+  (*jpeg)[*len - 1] = 0xD9;
   return 0;
 }
 
@@ -85,6 +98,7 @@ int main(int argc, char **argv) {
   if (adp_init(&adp, sk, argv[3], argv[4], "host")) return 3;
   for (int i = 5; i < argc; i++) {
     if (!strcmp(argv[i], "display")) adp.show_text = show;
+    if (!strcmp(argv[i], "camera")) adp.snapshot = snapshot;
     if (!strcmp(argv[i], "secure")) adp.secure = true;
   }
   adp_new_session(&adp);

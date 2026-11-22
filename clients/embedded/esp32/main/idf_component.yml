@@ -3,3 +3,7 @@ dependencies:
   espressif/esp_websocket_client: "^1.5.0"
   espressif/libsodium: "^1.0.20"
   espressif/cjson: "^1.7.18"
+  espressif/esp32-camera:
+    version: "^2.0.0"
+    rules:
+      - if: "target in [esp32, esp32s2, esp32s3]"

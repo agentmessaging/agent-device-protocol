@@ -4,8 +4,9 @@ A small ESP32 board as an agent device. It opens the [outbound connection](../..
 
 - `device.health`: `{status:"ok", platform:"esp32s3"}` (the chip name).
 - `display.text`, only when you turn it on and your board port shows the text (see below).
+- `camera.snapshot`, on a Seeed XIAO ESP32-S3 Sense with the camera option on and the encrypted connection (see below).
 
-Nothing else is advertised: no camera, microphone, speaker, activity events, device input or locally approved transfers.
+Nothing else is advertised: no microphone, speaker, activity events, device input or locally approved transfers.
 
 Status: the protocol core (`main/adp.c`) is tested on a computer against the SDK (`tests/esp32-client.test.mjs`). The firmware (`main/main.c`) compiles with ESP-IDF 5.5 for esp32s3 and has run on a Seeed XIAO ESP32-S3 Sense: it joins Wi-Fi, burns the eFuse key, creates its device key in encrypted NVS and prints it. A full session with a controller has not been run on a board yet.
 
@@ -59,6 +60,18 @@ These go into `sdkconfig`, which Git ignores. Do not commit it: it holds your Wi
 
 Pairing is local, as the protocol requires: the board trusts only the controller key flashed into it, and the controller trusts only the device key you pinned.
 
+## Camera (XIAO ESP32-S3 Sense)
+
+Build with the board's settings file, which turns on the 8 MB octal PSRAM, the 8 MB flash and the camera:
+
+```bash
+idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.xiao-s3-sense" set-target esp32s3
+idf.py menuconfig    # Wi-Fi and controller, as above
+idf.py build flash monitor
+```
+
+The **Offer camera.snapshot** option is the owner's local grant for the camera. The board offers `camera.snapshot` only when the option is on, the connection is encrypted, and the camera answered at boot. The user LED is the capture sign: it goes on before the camera starts, the camera runs only for the picture (the sensor is stopped between pictures), and the LED stays on three seconds after it. The answer is `{mime:"image/jpeg",data:"<standard base64>"}`, 1024×768, at most 1 MiB. A picture takes about 2.5 seconds, mostly the camera starting and letting its exposure settle.
+
 ## Showing text
 
 Turn on **Offer display.text** in menuconfig and add this function to your board port (a new file in `main/`, added to `main/CMakeLists.txt`):
@@ -75,7 +88,8 @@ The text is up to 4096 bytes of UTF-8 and is literal text, never markup. Without
 - **Frame size.** Frames larger than 16 KiB are dropped. The controller then waits 15 seconds for the call to time out.
 - **Memory.** At most 8 outstanding challenges (the HTTP profile allows 512), one call at a time, and each call is answered before the next frame is read.
 - **Ownership.** Owner and agent come from the flashed config. A transfer means flashing new config. `revision` is a new random value on each boot.
-- **Partly tested on hardware.** Wi-Fi, encrypted NVS and key creation ran on a XIAO ESP32-S3 Sense. The WebSocket session, refusal handling and reconnect timing have not been run on a board.
+- **Partly tested on hardware.** On a XIAO ESP32-S3 Sense (OV3660): Wi-Fi, encrypted NVS, key creation, the encrypted connection to an SDK hub at a home network address, discovery, health and snapshots. Refusal handling and reconnect timing have not been run on a board.
+- **No local stop yet.** Turning the camera off means flashing with the option off.
 
 ## Open protocol questions
 
