@@ -11,7 +11,7 @@ Updated: 2026-11-22. This is the repository's internal work list, not a claim of
 | [F004](F004-platform-renderers.md) | P3 | Proposed | Embedded/mobile/native adapters | F003; platform-specific design and hardware | Internal record |
 | [F005](F005-kiosk-redesign.md) | P2 | In progress | Kiosk redesign, talk, grants, local preview | Physical-device acceptance; B001 soak | Internal record |
 | [F006](F006-esp32-client.md) | P3 | In progress | ESP32 device client: health and optional text | A board, an ESP-IDF build and a transport decision | Internal record |
-| [F007](F007-encrypted-home-network-connection.md) | P2 | Ready | Encrypted home network connection in the SDK (S003) | S003 accepted | Internal record |
+| [F007](F007-encrypted-home-network-connection.md) | P2 | Done | Encrypted home network connection in the SDK (S003) | — | Internal record |
 | [F008](F008-esp32-eyes-and-ears.md) | P2 | Proposed | ESP32-S3 eyes and ears: camera, talk control, speaker | F007, F006 firmware build, the boards | Internal record |
 
 All implementation owners are currently unassigned. Start with B001; avatar packages can be designed while profiling is pending, but adding an animated renderer to the reported kiosk is gated on reliability evidence. The current task delivers documentation only. Each implementation gets its own branch and PR; split F004 into concrete per-platform items before implementation.

@@ -1,0 +1,14 @@
+{
+  "note": "S003 test vectors. Ephemeral secrets are the RFC 7748 section 6.1 example keys (Alice = controller, Bob = device); shared is their RFC 7748 result. helloBody and acceptBody are the decoded wire packet bodies, byte for byte. firstCiphertext is the controller-to-device message with counter 0 (ciphertext then 16-byte tag).",
+  "controllerEphemeralSecret": "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a",
+  "controllerEphemeral": "hSDwCYkwp1R0i33ctD73Wg2_Og0mOBr066SpjqqbTmo",
+  "deviceEphemeralSecret": "5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb",
+  "deviceEphemeral": "3p7bfXt9wbTTW2HC7OQ1Nz-DQ8hbeGdNrfx-FG-IK08",
+  "shared": "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742",
+  "helloBody": "{\"type\":\"secure.hello\",\"version\":1,\"id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"to\":\"DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD\",\"ephemeral\":\"hSDwCYkwp1R0i33ctD73Wg2_Og0mOBr066SpjqqbTmo\"}",
+  "acceptBody": "{\"type\":\"secure.accept\",\"version\":1,\"id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"to\":\"CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\",\"assignedAgent\":\"lola@host.local\",\"ephemeral\":\"3p7bfXt9wbTTW2HC7OQ1Nz-DQ8hbeGdNrfx-FG-IK08\",\"peerEphemeral\":\"hSDwCYkwp1R0i33ctD73Wg2_Og0mOBr066SpjqqbTmo\"}",
+  "controllerToDevice": "d437d6a1b3be924be5253bcd80d4ae675215dd44ca8cfdfd5c3f046b6bce3240",
+  "deviceToController": "3476702f8cba5d327363bebc5961bf411b816cb0ca3ec1ffe5c03c866c3906f0",
+  "firstPlaintext": "{\"type\":\"hello\",\"challenge\":\"cccccccccccccccccccccccccccccccccccccccccccccccc\"}",
+  "firstCiphertext": "05a4c09f598cf74208e36d04658bce59f25f3400a6be23d3921a47dc17954698057d9fa598f8ede93bbe06f19168bcbbf42f103760203b5a9e28826a3ec8f9c1b6ce6c9c944d1d45873d98343928bd280797bd7d8347ef922d2e10b934a65b"
+}
