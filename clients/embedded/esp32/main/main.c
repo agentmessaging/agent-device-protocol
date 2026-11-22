@@ -27,7 +27,10 @@ static const char *TAG = "adp";
 typedef struct {
   char *data;  // NULL: the connection ended
   size_t len;
+  bool binary;  // S003: every message after the key exchange is binary
 } frame_t;
+// An encrypted message carries a whole frame plus the 16-byte tag
+#define MAX_MESSAGE (ADP_MAX_FRAME + 16)
 static QueueHandle_t frames;
 static EventGroupHandle_t wifi;
 static char *rx;
@@ -99,9 +102,9 @@ static void on_ws(void *arg, esp_event_base_t base, int32_t id, void *event) {
     last_rx = (uint32_t)now_ms();  // any frame, pings included, shows the controller is there
     if (d->op_code == 0x8 && d->data_len > 2 && ((uint8_t)d->data_ptr[0] << 8 | (uint8_t)d->data_ptr[1]) == 4003)
       snprintf(refusal, sizeof refusal, "%.*s", d->data_len - 2, d->data_ptr + 2);
-    if (d->op_code != 0x1) return;
-    if (d->payload_len > ADP_MAX_FRAME) {
-      if (d->payload_offset == 0) ESP_LOGW(TAG, "Dropped a %d-byte frame (limit %d)", d->payload_len, ADP_MAX_FRAME);
+    if (d->op_code != 0x1 && d->op_code != 0x2) return;
+    if (d->payload_len > MAX_MESSAGE) {
+      if (d->payload_offset == 0) ESP_LOGW(TAG, "Dropped a %d-byte frame (limit %d)", d->payload_len, MAX_MESSAGE);
       return;
     }
     if (d->payload_offset == 0) {
@@ -111,7 +114,7 @@ static void on_ws(void *arg, esp_event_base_t base, int32_t id, void *event) {
     if (!rx || d->payload_offset + d->data_len > d->payload_len) return;
     memcpy(rx + d->payload_offset, d->data_ptr, d->data_len);
     if (d->payload_offset + d->data_len < d->payload_len) return;
-    frame_t f = {rx, d->payload_len};
+    frame_t f = {rx, d->payload_len, d->op_code == 0x2};
     rx = NULL;
     if (xQueueSend(frames, &f, 0) != pdTRUE) {
       ESP_LOGW(TAG, "Dropped a frame: the queue is full");
@@ -146,10 +149,16 @@ static bool session(adp_t *adp, const char *uri) {
     frame_t f;
     if (xQueueReceive(frames, &f, pdMS_TO_TICKS(100)) == pdTRUE) {
       if (!f.data) break;
-      char *out = NULL;
-      int was = adp->state, rc = adp_handle(adp, f.data, f.len, now_ms(), &out);
+      unsigned char *out = NULL;
+      size_t out_len = 0;
+      bool out_binary = false;
+      int was = adp->state,
+          rc = adp_receive(adp, (unsigned char *)f.data, f.len, f.binary, now_ms(), &out, &out_len, &out_binary);
       free(f.data);
-      if (out) esp_websocket_client_send_text(client, out, strlen(out), pdMS_TO_TICKS(5000));
+      if (out && out_binary)
+        esp_websocket_client_send_bin(client, (const char *)out, out_len, pdMS_TO_TICKS(5000));
+      else if (out)
+        esp_websocket_client_send_text(client, (const char *)out, out_len, pdMS_TO_TICKS(5000));
       free(out);
       if (rc) break;
       if (was < 2 && adp->state == 2) ESP_LOGI(TAG, "Connected to the controller for %s", adp->agent);
@@ -190,13 +199,19 @@ void app_main(void) {
     return;
   }
   sodium_memzero(sk, sizeof sk);
+#if CONFIG_ADP_SECURE
+  adp.secure = true;
+#else
+  ESP_LOGW(TAG, "Plain connection: at a home network address only health and screen text are allowed");
+#endif
 #if CONFIG_ADP_DISPLAY_TEXT
   adp.show_text = adp_board_show_text;
 #endif
   ESP_LOGI(TAG, "Device public key (safe to share): %s", adp.key);
 
   static char uri[sizeof CONFIG_ADP_CONTROLLER_URL + 64];
-  snprintf(uri, sizeof uri, "%s/v1/connect/%s", CONFIG_ADP_CONTROLLER_URL, adp.key);
+  // S003: an encrypted device never connects to /v1/connect, so nobody on the network can force it down
+  snprintf(uri, sizeof uri, "%s/v1/%s/%s", CONFIG_ADP_CONTROLLER_URL, adp.secure ? "secure" : "connect", adp.key);
   // reverse.md: backoff from one to thirty seconds plus up to 25% jitter, reset by a good session;
   // after a final refusal, two more tries, then stop until the owner restarts the board.
   int backoff = 1000, refused = 0;

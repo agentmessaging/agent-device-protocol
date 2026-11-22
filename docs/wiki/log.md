@@ -35,3 +35,7 @@ Implemented [S003](specs/S003-encrypted-home-network-connection.md) in the SDK w
 ## [2026-11-22] feature | S003 in the ESP32 C core
 
 Added the S003 encrypted connection to the ESP32 C core for [F008](backlog/F008-esp32-eyes-and-ears.md): `adp_receive()`, the signed X25519 key exchange, HKDF-SHA256 keys and ChaCha20-Poly1305 messages with implicit counters, all with libsodium. The host build passes the S003 test vectors and connects to the SDK hub through `/v1/secure`. Not compiled with ESP-IDF, no board used, and the firmware does not call it yet.
+
+## [2026-11-22] feature | S003 in the ESP32 firmware, first board
+
+`main.c` connects through `/v1/secure` by default (`ADP_SECURE`) and passes text and binary frames to `adp_receive()` ([F008](backlog/F008-esp32-eyes-and-ears.md)). Compiled with ESP-IDF v5.5.6 for esp32s3 and flashed to a XIAO ESP32-S3 Sense: eFuse key, device key in encrypted NVS and Wi-Fi worked; the XIAO needs its external antenna to join. No session with a controller yet.
