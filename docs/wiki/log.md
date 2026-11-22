@@ -23,3 +23,8 @@ Built the owner's approved kiosk design as the real page, with [F005](backlog/F0
 ## [2026-11-13] feature | ESP32 client
 
 Added the ESP32 client in `clients/embedded/esp32` with [F006](backlog/F006-esp32-client.md): ESP-IDF firmware, outbound WebSocket, device key in NVS, `device.health` and optional `display.text`. Its C protocol core, compiled for the host, passes `tests/esp32-client.test.mjs` against the SDK signer and hub. No ESP-IDF toolchain was available, so the firmware was not compiled, and no board was used. Open protocol questions are in the client README; `protocol/` is unchanged.
+
+## [2026-11-22] spec | Encrypted home network connection
+
+Wrote [S003](specs/S003-encrypted-home-network-connection.md), proposed: a `/v1/secure` path with a signed X25519 key exchange and ChaCha20-Poly1305 messages, keyed from the pinned keys, so a board on a home network can use its camera, microphone and speaker. Added [F007](backlog/F007-encrypted-home-network-connection.md) for the SDK and [F008](backlog/F008-esp32-eyes-and-ears.md) for a XIAO ESP32-S3 Sense. Corrected an assumption: the outbound profile already carries messages up to 2,200,000 bytes, so snapshots and audio need no chunking; the 16 KiB limit is the ESP32 firmware's. Documentation only: `protocol/` and code are unchanged, and nothing was run.
+
