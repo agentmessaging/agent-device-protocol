@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Proposed S004, listening for a wake phrase: a local `listen` grant (off by default, the controller cannot turn it on), audio kept only in RAM and never sent while listening, a listening sign different from the recording sign, and a detection that becomes the existing `audio` event. Design only; no wire change.
 - ESP32 client: `camera.snapshot` on a Seeed XIAO ESP32-S3 Sense, through the encrypted connection only. Turning on the camera option is the owner's grant; the user LED is the capture sign, the camera runs only for the picture, and the answer is a 1024×768 JPEG of at most 1 MiB. Build with the new `sdkconfig.defaults.xiao-s3-sense` (octal PSRAM, 8 MB flash). Tested on the board against the SDK hub.
 - ESP32 client: the firmware connects through the encrypted `/v1/secure` (S003) by default, with a new menuconfig option to turn it off for a controller that does not implement S003. It never falls back to a plain connection. Built with ESP-IDF 5.5 for esp32s3 and run on a XIAO ESP32-S3 Sense (Wi-Fi, encrypted NVS, device key); the XIAO needs its external antenna.
 - ESP32 client: the C core has the encrypted home network connection (S003). With `secure` set it does the signed X25519 key exchange and then reads and sends only encrypted binary messages, through the new `adp_receive()`; it never falls back to a plain connection. It passes the S003 test vectors and connects to the SDK hub through `/v1/secure` in the host test. The firmware does not use it yet.

@@ -14,6 +14,7 @@ Updated: 2026-11-22. Proposed work below is **not implemented** by these documen
 - [S001 — Portable agent avatars](specs/S001-portable-agent-avatars.md): package, state transport, ownership, device adaptation and rollout; proposed.
 - [S002 — Kiosk memory and lifecycle reliability](specs/S002-kiosk-memory-lifecycle.md): issue #20 investigation, bounded resources and soak acceptance; proposed.
 - [S003 — Encrypted home network connection](specs/S003-encrypted-home-network-connection.md): signed X25519 key exchange and encrypted messages for boards that cannot run Tailscale; implemented in the SDK, ESP32 pending.
+- [S004 — Listening for a wake phrase](specs/S004-wake-phrase-listening.md): a local listening state with its own grant and sign, so a person can say the agent's name instead of pressing a button; proposed.
 
 ## Work items
 
@@ -26,6 +27,7 @@ Updated: 2026-11-22. Proposed work below is **not implemented** by these documen
 - [F006 — ESP32 client](backlog/F006-esp32-client.md): P3, in progress; protocol core tested on a computer, board untested.
 - [F007 — Encrypted home network connection](backlog/F007-encrypted-home-network-connection.md): P2, done; S003 in the SDK, tested on a computer.
 - [F008 — ESP32-S3 eyes and ears](backlog/F008-esp32-eyes-and-ears.md): P2, proposed; camera, talk control and speaker on a XIAO ESP32-S3 Sense; depends on F007.
+- [F009 — Wake phrase listening](backlog/F009-wake-phrase-listening.md): P2, proposed; "Hey Bruce" and "Hey Lola" models, the board and the kiosk; depends on S004 and F008.
 
 ## Sources
 
