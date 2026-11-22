@@ -7,7 +7,7 @@ A small ESP32 board as an agent device. It opens the [outbound connection](../..
 
 Nothing else is advertised: no camera, microphone, speaker, activity events, device input or locally approved transfers.
 
-Status: the protocol core (`main/adp.c`) is tested on a computer against the SDK (`tests/esp32-client.test.mjs`). The firmware around it (`main/main.c`) has not been compiled or run on a board yet.
+Status: the protocol core (`main/adp.c`) is tested on a computer against the SDK (`tests/esp32-client.test.mjs`). The firmware (`main/main.c`) compiles with ESP-IDF 5.5 for esp32s3 and has run on a Seeed XIAO ESP32-S3 Sense: it joins Wi-Fi, burns the eFuse key, creates its device key in encrypted NVS and prints it. A full session with a controller has not been run on a board yet.
 
 ## Why ESP-IDF
 
@@ -15,7 +15,7 @@ ESP-IDF has encrypted NVS, menuconfig for settings that stay out of Git, and man
 
 ## Boards
 
-Any ESP32-family chip with Wi-Fi that ESP-IDF 5.1 or later supports. It needs about 1.5 MB of flash for the app, so use a 4 MB board.
+Any ESP32-family chip with Wi-Fi that ESP-IDF 5.1 or later supports. It needs about 1.5 MB of flash for the app, so use a 4 MB board. A Seeed XIAO ESP32-S3 needs its external antenna attached: without it the board sees the access point but every join attempt times out at `auth -> init`.
 
 | Chip | Device key storage |
 | --- | --- |
@@ -36,6 +36,7 @@ idf.py build flash monitor
 In the **Agent Device Protocol** menu set:
 
 - Wi-Fi network name and password.
+- Encrypted connection (on by default): connect through `/v1/secure` (S003). Turn it off only for a controller that does not implement S003.
 - Controller address: `ws://IPV4:PORT` of the controller's outbound listener, for example `ws://100.64.0.10:23112`. Only loopback, Tailscale (`100.64.0.0/10`) and private LAN addresses are accepted. No DNS names.
 - Controller public key: the owning agent's key.
 - Owning agent's full AMP address, for example `assistant@acme.aimaestro.local`.
@@ -70,18 +71,17 @@ The text is up to 4096 bytes of UTF-8 and is literal text, never markup. Without
 
 ## Limits
 
-- **Transport.** The board connects with plain `ws://` today, because a board cannot run Tailscale. [reverse.md, Home network connections](../../../protocol/reverse.md#home-network-connections) allows this for `device.health` and `display.text` only, which is all this board offers. Every request and answer is still signed and uses one-use challenges, so no one on the network can act as the controller or the device, but people on the same network can read the screen text. The reference listener binds only loopback and Tailscale addresses, so the board also needs a network route to that address.
-- **Encrypted connection (S003), core only.** The C core has the encrypted connection of [S003](../../../docs/wiki/specs/S003-encrypted-home-network-connection.md): with `adp.secure` set it answers only a signed `secure.hello`, sends a signed `secure.accept` with a new X25519 key, and after that reads and sends only ChaCha20-Poly1305 binary messages through `adp_receive()`. It never falls back to a plain connection. It passes the S003 test vectors and connects to the SDK hub through `/v1/secure` in the host test. The firmware (`main.c`) does not use it yet: that is [F008](../../../docs/wiki/backlog/F008-esp32-eyes-and-ears.md).
+- **Transport.** By default the board connects to `ws://IPV4:PORT/v1/secure/DEVICE_KEY`, the encrypted connection of [S003](../../../docs/wiki/specs/S003-encrypted-home-network-connection.md): it answers only a signed `secure.hello`, sends a signed `secure.accept` with a new X25519 key, and after that reads and sends only ChaCha20-Poly1305 binary messages. It never falls back to a plain connection; when the controller refuses `/v1/secure`, it retries later. With the option off it uses plain `/v1/connect`, which [reverse.md](../../../protocol/reverse.md#home-network-connections) limits to `device.health` and `display.text` from a home network address, and people on the same network can read the screen text. Either way the controller must listen on an address the board can reach: the reference listener binds only loopback and Tailscale, and AI Maestro needs `AIMAESTRO_DEVICE_HOME_ADDRESS`.
 - **Frame size.** Frames larger than 16 KiB are dropped. The controller then waits 15 seconds for the call to time out.
 - **Memory.** At most 8 outstanding challenges (the HTTP profile allows 512), one call at a time, and each call is answered before the next frame is read.
 - **Ownership.** Owner and agent come from the flashed config. A transfer means flashing new config. `revision` is a new random value on each boot.
-- **Not tested on hardware.** Wi-Fi, NVS, encrypted NVS, the WebSocket client, refusal handling and reconnect timing have not been run on a board.
+- **Partly tested on hardware.** Wi-Fi, encrypted NVS and key creation ran on a XIAO ESP32-S3 Sense. The WebSocket session, refusal handling and reconnect timing have not been run on a board.
 
 ## Open protocol questions
 
 These are written down here rather than changed in `protocol/`:
 
-1. **Encrypted transport for boards without Tailscale.** Answered by [S003](../../../docs/wiki/specs/S003-encrypted-home-network-connection.md). The C core implements it; the firmware does not use it yet.
+1. **Encrypted transport for boards without Tailscale.** Answered by [S003](../../../docs/wiki/specs/S003-encrypted-home-network-connection.md). The firmware uses it by default.
 2. **Device size limits.** There is no field for a device to say how large a request it accepts. Should `register` carry a limit (for example `maxRequestBytes`) so a controller can refuse early instead of timing out?
 3. **Refusal header.** `esp_websocket_client` gives the HTTP status of a refused upgrade but not the `X-ADP-Refusal` header. The board treats HTTP 403 as `unknown_device` (final) and any other status as temporary. Should the status alone be enough?
 4. **Revision without local approval.** `revision` is described for locally approved changes. What should a device that has no proposals and no persistent revision send?

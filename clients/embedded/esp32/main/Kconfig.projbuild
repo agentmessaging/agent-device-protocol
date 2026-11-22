@@ -28,6 +28,15 @@ menu "Agent Device Protocol"
         help
             For example assistant@acme.aimaestro.local.
 
+    config ADP_SECURE
+        bool "Encrypted connection (/v1/secure, S003)"
+        default y
+        help
+            Connect through /v1/secure: a key exchange signed with the pinned keys,
+            then every message encrypted. Never falls back to /v1/connect. Required
+            for a camera, microphone or speaker at a home network address. Turn it
+            off only for a controller that does not implement S003.
+
     config ADP_DISPLAY_TEXT
         bool "Offer display.text (needs adp_board_show_text from your board port)"
         default n
