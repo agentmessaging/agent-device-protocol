@@ -16,7 +16,21 @@ So a home network connection carries only data that is safe to read:
 - The controller MUST refuse `input` and `audio` events over it, and close the connection. `device.used` is allowed.
 - The controller decides by the address the connection came from, not by what the device claims.
 
-An encrypted home network connection, keyed from the pinned device and controller keys, is planned. Until it exists, these limits apply to every connection from a private address.
+These limits apply to every plain connection (`/v1/connect`) from a private address. An [encrypted home network connection](#encrypted-home-network-connection) (`/v1/secure`) has no such limit.
+
+## Encrypted home network connection
+
+A device that cannot run Tailscale and has a camera, a microphone or a speaker connects to `ws://IPV4:PORT/v1/secure/DEVICE_KEY` instead. The address can be loopback, Tailscale or private. Before the upgrade the controller applies the same checks as for `/v1/connect`.
+
+1. The controller makes a new X25519 key pair for the connection and sends a wire packet signed with the agent's controller key: `{type:"secure.hello",version:1,id,challenge,to:deviceKey,ephemeral}`. `id` and `challenge` are fresh 24-byte random hex values; `ephemeral` is the raw 32-byte X25519 public key, unpadded base64url.
+2. The device verifies it with its pinned controller key, makes its own X25519 key pair and answers, signed with its device key: `{type:"secure.accept",version:1,id,challenge,to:controllerKey,assignedAgent,ephemeral,peerEphemeral}`, with `id` and `challenge` copied and `peerEphemeral` set to the controller's `ephemeral`.
+3. The controller verifies it with the pinned device key, every correlation field, its own ephemeral key in `peerEphemeral`, and the pinned agent in `assignedAgent` (another agent closes with 4003 `not_owner`).
+
+Both sides compute `shared = X25519(own secret, peer public)` (an all-zero result closes the connection), `transcript = SHA-256("adp-secure/1" || 0x00 || hello body || accept body)` over the decoded packet bodies, and two keys with HKDF-SHA256 (`ikm = shared`, `salt = transcript`, 32 bytes): info `adp-secure/1 controller-to-device` and `adp-secure/1 device-to-controller`. Each side then deletes its ephemeral secret. The key exchange and the authentication that follows end within five seconds.
+
+From then on every message is one WebSocket binary message: the UTF-8 JSON the plain profile would send, encrypted with ChaCha20-Poly1305 (RFC 8439) under the key for its direction, ciphertext followed by the 16-byte tag, no additional data. The nonce is four zero bytes and a 64-bit big-endian counter that starts at 0 in each direction and grows by one per message. A message that does not decrypt with the next expected counter, a text message, or a decrypted message over 2,200,000 bytes closes the connection; a replayed, dropped, reordered or changed message therefore closes it too. After 2^32 messages in one direction the sender closes, and the device reconnects with a new key exchange. Ping and pong frames carry no data and are not encrypted.
+
+The unchanged profile runs inside, starting with the controller's `hello`: every signature, pin, one-use challenge and limit still applies. A device that uses `/v1/secure` MUST NOT fall back to `/v1/connect` when the encrypted connection fails, so that no one on the network can force a downgrade. The key exchange gives confidentiality, integrity and forward secrecy against the network. It does not hide the device key in the path, the addresses, or the timing and size of messages. Test vectors are in `tests/vectors/secure-v1.json`.
 
 ## Authentication and lifecycle
 

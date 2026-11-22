@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed; not implemented |
+| Status | Implemented in the SDK (F007); ESP32 pending (F008) |
 | Date | 2026-11-22 |
 | Owner | Unassigned |
 | Work | [F007](../backlog/F007-encrypted-home-network-connection.md); consumer [F008](../backlog/F008-esp32-eyes-and-ears.md) |
@@ -107,11 +107,11 @@ TLS needs certificates or a pre-shared key setup that boards and controllers do 
 
 SDK (simulated, on a computer):
 
-- [ ] `ReverseHub` accepts `/v1/secure/DEVICE_KEY` and `DeviceConnection` connects with `secure: true`. Discovery, invocation, `input`, `audio` and `device.used` work through the encrypted connection.
-- [ ] A modified, replayed, dropped or reordered encrypted message closes the connection. A text message after the key exchange closes the connection.
-- [ ] A handshake signed by an unpinned key, with a wrong `to`, a wrong `peerEphemeral` or another agent's address, is refused.
-- [ ] A connection from a private address to `/v1/connect` is limited as reverse.md says: other capabilities get signed `denied`; `input` and `audio` close the connection. The same device through `/v1/secure` has no such limit.
-- [ ] Test vectors: a fixed key exchange with known inputs gives known keys and a known first ciphertext, so other implementations can check against them.
+- [x] `ReverseHub` accepts `/v1/secure/DEVICE_KEY` and `DeviceConnection` connects with `secure: true`. Discovery, invocation, `input`, `audio` and `device.used` work through the encrypted connection.
+- [x] A modified, replayed, dropped or reordered encrypted message closes the connection. A text message after the key exchange closes the connection.
+- [x] A handshake signed by an unpinned key, with a wrong `to`, a wrong `peerEphemeral` or another agent's address, is refused.
+- [x] A connection from a private address to `/v1/connect` is limited as reverse.md says: other capabilities get signed `denied`; `input` and `audio` close the connection. The same device through `/v1/secure` has no such limit.
+- [x] Test vectors: a fixed key exchange with known inputs gives known keys and a known first ciphertext, so other implementations can check against them.
 
 ESP32 (host build of the C core, then a board):
 

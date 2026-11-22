@@ -28,3 +28,7 @@ Added the ESP32 client in `clients/embedded/esp32` with [F006](backlog/F006-esp3
 
 Wrote [S003](specs/S003-encrypted-home-network-connection.md), proposed: a `/v1/secure` path with a signed X25519 key exchange and ChaCha20-Poly1305 messages, keyed from the pinned keys, so a board on a home network can use its camera, microphone and speaker. Added [F007](backlog/F007-encrypted-home-network-connection.md) for the SDK and [F008](backlog/F008-esp32-eyes-and-ears.md) for a XIAO ESP32-S3 Sense. Corrected an assumption: the outbound profile already carries messages up to 2,200,000 bytes, so snapshots and audio need no chunking; the 16 KiB limit is the ESP32 firmware's. Documentation only: `protocol/` and code are unchanged, and nothing was run.
 
+## [2026-11-22] feature | Encrypted home network connection in the SDK
+
+Implemented [S003](specs/S003-encrypted-home-network-connection.md) in the SDK with [F007](backlog/F007-encrypted-home-network-connection.md) and moved the contract into `protocol/reverse.md`. The hub now also enforces the home network limits on plain connections from private addresses, which reverse.md required but the SDK did not check. Tested on one computer with simulated home addresses; no board was used. [F008](backlog/F008-esp32-eyes-and-ears.md) (the ESP32 side) remains proposed.
+

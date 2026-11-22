@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Encrypted home network connection (S003): a device that cannot run Tailscale connects to `/v1/secure/DEVICE_KEY` and the two sides exchange X25519 keys signed with their pinned Ed25519 keys; every message after that is ChaCha20-Poly1305 with implicit counters. From a private address the encrypted connection carries the whole profile, so a board can use its camera, microphone and speaker; a plain one keeps the home network limits. SDK: `ReverseHub` accepts both paths and enforces the limits on plain home network connections (it did not before), and `DeviceConnection({ secure: true })` connects encrypted and never falls back. Test vectors in `tests/vectors/secure-v1.json`.
+
 - `transcribe` may return `{ text, speaker }`. The controller adds a valid `speaker` (`{id, name, confidence}`, the host's own voice match) to `device.input` from audio, as a guess for context, never proof. An invalid one is dropped. A plain string works as before.
 - The device-initiated profile allows a private network address for devices that cannot join a tailnet, such as the ESP32 board. That connection is not encrypted, so it carries only `device.health` and `display.text`; the controller refuses everything else and closes on `input` or `audio`. Accepting these connections is optional, and the reference listener still binds only loopback and Tailscale.
 - ESP32 client: it logs a frame it drops (over 16 KiB, or the queue full) and an NVS erase that loses the device key, instead of staying silent. The controller-silence timer is 32 bits, so the main task can't read it half-written.
