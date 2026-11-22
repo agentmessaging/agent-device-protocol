@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- ESP32 client: the C core has the encrypted home network connection (S003). With `secure` set it does the signed X25519 key exchange and then reads and sends only encrypted binary messages, through the new `adp_receive()`; it never falls back to a plain connection. It passes the S003 test vectors and connects to the SDK hub through `/v1/secure` in the host test. The firmware does not use it yet.
 - Encrypted home network connection (S003): a device that cannot run Tailscale connects to `/v1/secure/DEVICE_KEY` and the two sides exchange X25519 keys signed with their pinned Ed25519 keys; every message after that is ChaCha20-Poly1305 with implicit counters. From a private address the encrypted connection carries the whole profile, so a board can use its camera, microphone and speaker; a plain one keeps the home network limits. SDK: `ReverseHub` accepts both paths and enforces the limits on plain home network connections (it did not before), and `DeviceConnection({ secure: true })` connects encrypted and never falls back. Test vectors in `tests/vectors/secure-v1.json`.
 
 - `transcribe` may return `{ text, speaker }`. The controller adds a valid `speaker` (`{id, name, confidence}`, the host's own voice match) to `device.input` from audio, as a guess for context, never proof. An invalid one is dropped. A plain string works as before.

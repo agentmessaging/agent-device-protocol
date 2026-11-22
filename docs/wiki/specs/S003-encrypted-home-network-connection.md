@@ -115,7 +115,7 @@ SDK (simulated, on a computer):
 
 ESP32 (host build of the C core, then a board):
 
-- [ ] The C core passes the same test vectors and connects to the SDK `ReverseHub` through `/v1/secure`.
+- [x] The C core passes the same test vectors and connects to the SDK `ReverseHub` through `/v1/secure` (F008, host build).
 - [ ] On a XIAO ESP32-S3 Sense: key exchange, health, text and a snapshot through a private address. Physical evidence is required for F008.
 
 Rollout: opt-in. A controller accepts private addresses only when its operator turns it on and names the listening address. AI Maestro integration is tracked in the AI Maestro repository.

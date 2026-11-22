@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Type / priority / status | Feature / P2 / proposed |
+| Type / priority / status | Feature / P2 / in progress |
 | Owner | Unassigned |
 | GitHub | None (internal record) |
 | Spec | [S003](../specs/S003-encrypted-home-network-connection.md), [typed capabilities](../../../protocol/capabilities.md), [outbound profile, device events](../../../protocol/reverse.md#device-events-and-input) |
@@ -22,10 +22,13 @@ Extend the ESP32 client so a XIAO ESP32-S3 Sense (OV2640/OV3660 camera, PDM micr
 
 ## Acceptance
 
-- [ ] Host build of the C core: S003 test vectors, snapshot, audio and speaker messages against the SDK hub through `/v1/secure`.
+- [x] Host build of the C core: S003 test vectors and the key exchange against the SDK hub through `/v1/secure`.
+- [ ] Host build of the C core: snapshot, audio and speaker messages through `/v1/secure`.
 - [ ] Firmware compiles with ESP-IDF for esp32s3.
 - [ ] On a XIAO ESP32-S3 Sense: secure connection at a private address, health, snapshot with the LED sign, talk control to text at the controller, speaker playback, local stop, reconnect.
 
 ## Evidence and status history
 
 2026-11-22: proposed. No code yet.
+
+2026-11-22, branch `feat/esp32-secure-core`: the C core (`main/adp.c`) has S003: `adp_receive()` takes text or binary messages, `secure.hello` is checked against the pinned controller key (type, version, `to`, id and challenge format, ephemeral key, exactly six fields), the accept carries a new X25519 key, keys come from HKDF-SHA256 over the transcript, messages are ChaCha20-Poly1305 IETF with implicit counters, and the ephemeral secret and shared result are wiped. `node --test tests/esp32-client.test.mjs` passes 12 of 12 on macOS (Apple clang, libsodium 1.0.20): the published vectors (both X25519 public keys, both direction keys, the first ciphertext), discovery, health and text from the C core through `/v1/secure` to the SDK `ReverseHub` from a simulated home address, 4003 `not_owner` for another agent, refused hellos (another signer, another device, binary, a plain `hello`), and closing on a changed, replayed, plain or out-of-order message. `npm test`: 118 pass, 0 fail. Host build only: not compiled with ESP-IDF, not run on a board, and `main.c` does not call it yet.
