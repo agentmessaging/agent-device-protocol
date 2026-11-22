@@ -24,6 +24,7 @@ int adp_board_show_text(const char *text, void *user);
 #endif
 #if CONFIG_ADP_CAMERA
 int adp_board_camera_init(void);  // board_camera.c
+void adp_board_doctor(EventGroupHandle_t wifi, const char *url);  // board_doctor.c
 int adp_board_snapshot(unsigned char **jpeg, size_t *len, void *user);
 #endif
 
@@ -219,6 +220,9 @@ void app_main(void) {
     adp.snapshot = adp_board_snapshot;
 #endif
   ESP_LOGI(TAG, "Device public key (safe to share): %s", adp.key);
+#if CONFIG_ADP_DOCTOR
+  adp_board_doctor(wifi, CONFIG_ADP_CONTROLLER_URL);
+#endif
 
   static char uri[sizeof CONFIG_ADP_CONTROLLER_URL + 64];
   // S003: an encrypted device never connects to /v1/connect, so nobody on the network can force it down

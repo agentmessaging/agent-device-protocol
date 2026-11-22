@@ -72,6 +72,25 @@ idf.py build flash monitor
 
 The **Offer camera.snapshot** option is the owner's local grant for the camera. The board offers `camera.snapshot` only when the option is on, the connection is encrypted, and the camera answered at boot. The user LED is the capture sign: it goes on before the camera starts, the camera runs only for the picture (the sensor is stopped between pictures), and the LED stays on three seconds after it. The answer is `{mime:"image/jpeg",data:"<standard base64>"}`, 1024×768, at most 1 MiB. A picture takes about 2.5 seconds, mostly the camera starting and letting its exposure settle.
 
+## Doctor (XIAO ESP32-S3 Sense)
+
+Turn on **Check the hardware at boot** (`ADP_DOCTOR`) to test the parts before the board connects. It prints one line per part to the USB console (`idf.py monitor`). A real run, with the amplifier not yet working:
+
+```
+DOCTOR chip       PASS esp32s3 rev 0.2, 2 cores, flash 8 MB
+DOCTOR psram      PASS 8192 KB, 8189 KB free; internal RAM 232 KB free
+DOCTOR led        INFO blinked three times: a person must confirm it
+DOCTOR wifi       PASS Pelamecha, 10.0.0.107, signal -51 dBm
+DOCTOR controller PASS 10.0.0.79:23112 accepts connections
+DOCTOR microphone PASS room level -44.0 dBFS, peak 368
+DOCTOR speaker    FAIL 1 kHz tone -8.3 dB above the room at the microphone (check VIN, GND, BCLK, LRC, DIN)
+DOCTOR camera     PASS 23030 byte JPEG in 771 ms
+```
+
+The speaker check plays a 1.5 second 1 kHz tone and passes when the microphone hears it at least 15 dB above the room. The LED is on while the microphone or the camera runs. Nothing recorded leaves the board.
+
+Wire a MAX98357A amplifier to the XIAO: VIN to 5V, GND to GND, BCLK to D1 (GPIO2), LRC to D4 (GPIO5), DIN to D5 (GPIO6). Leave its SD and GAIN pins unconnected: the board then plays both channels mixed at 9 dB gain. Other pins are menuconfig options. These pins avoid the camera, the microphone (GPIO41/42) and the microSD slot (D8–D10).
+
 ## Showing text
 
 Turn on **Offer display.text** in menuconfig and add this function to your board port (a new file in `main/`, added to `main/CMakeLists.txt`):

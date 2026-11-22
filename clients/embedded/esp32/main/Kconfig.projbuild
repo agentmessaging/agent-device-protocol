@@ -54,4 +54,34 @@ menu "Agent Device Protocol"
             Turning it on is the owner's local grant for camera.snapshot. The user
             LED is the capture sign: the camera runs only while it is on.
 
+    config ADP_SPEAKER_BCLK
+        int "Speaker amplifier BCLK pin"
+        default 2
+        depends on IDF_TARGET_ESP32S3
+        help
+            I2S bit clock to a MAX98357A. On the XIAO ESP32-S3: D1 is GPIO2.
+
+    config ADP_SPEAKER_WS
+        int "Speaker amplifier LRC (word select) pin"
+        default 5
+        depends on IDF_TARGET_ESP32S3
+        help
+            On the XIAO ESP32-S3: D4 is GPIO5.
+
+    config ADP_SPEAKER_DOUT
+        int "Speaker amplifier DIN pin"
+        default 6
+        depends on IDF_TARGET_ESP32S3
+        help
+            On the XIAO ESP32-S3: D5 is GPIO6.
+
+    config ADP_DOCTOR
+        bool "Check the hardware at boot (XIAO ESP32-S3 Sense)"
+        default n
+        depends on IDF_TARGET_ESP32S3 && SPIRAM
+        help
+            Before connecting, print one line per part to the USB console: chip, PSRAM, LED,
+            Wi-Fi, controller address, microphone, speaker (a 1 kHz tone the microphone must
+            hear) and camera. The LED is on whenever the microphone or camera runs.
+
 endmenu
