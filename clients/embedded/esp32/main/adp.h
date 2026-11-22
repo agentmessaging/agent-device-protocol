@@ -8,7 +8,8 @@
 #define ADP_HEX 49            // 24 random bytes as 48 lowercase hex characters, plus NUL
 #define ADP_KEY 44            // unpadded base64url of a 32-byte Ed25519 public key, plus NUL
 #define ADP_CHALLENGES 8      // outstanding request challenges; the spec allows up to 512
-#define ADP_MAX_FRAME 16384   // largest frame handled; display.text needs about 6 KiB
+#define ADP_MAX_FRAME 16384   // largest frame received; display.text needs about 6 KiB
+#define ADP_MAX_SNAPSHOT (1024 * 1024)  // largest JPEG sent (S003): fits the profile's 2,200,000-byte message
 
 typedef struct {
   unsigned char sk[64];  // libsodium secret key: seed then public key
@@ -21,6 +22,9 @@ typedef struct {
   const char *platform;
   // display.text, advertised only when set. Returns 0 when shown.
   int (*show_text)(const char *text, void *user);
+  // camera.snapshot, advertised only when set: the owner's camera grant and a working capture sign.
+  // Shows the sign, takes one JPEG (*jpeg malloc'd, at most ADP_MAX_SNAPSHOT bytes) and returns 0.
+  int (*snapshot)(unsigned char **jpeg, size_t *len, void *user);
   void *user;
   // S003: connect through /v1/secure and refuse anything that is not encrypted
   bool secure;

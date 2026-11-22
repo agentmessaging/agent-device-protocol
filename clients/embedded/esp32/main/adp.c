@@ -212,6 +212,11 @@ static cJSON *registration(adp_t *adp, cJSON *r) {
     cJSON_AddItemToObject(defs, "display.text", definition("active", "text"));
     cJSON_AddTrueToObject(perm, "display.text");
   }
+  if (adp->snapshot) {
+    cJSON_AddItemToArray(caps, cJSON_CreateString("camera.snapshot"));
+    cJSON_AddItemToObject(defs, "camera.snapshot", definition("active", NULL));
+    cJSON_AddTrueToObject(perm, "camera");
+  }
   cJSON_AddItemToObject(r, "capabilities", caps);
   cJSON_AddItemToObject(r, "capabilityDefinitions", defs);
   cJSON_AddItemToObject(r, "streams", cJSON_CreateArray());
@@ -220,21 +225,45 @@ static cJSON *registration(adp_t *adp, cJSON *r) {
   return r;
 }
 
-// The argument checks of validateArguments() for the two capabilities this client has.
+// The argument checks of validateArguments() for the capabilities this client has. Omitted args mean {}.
 static bool valid_args(const char *capability, const cJSON *args) {
-  if (!args) return !strcmp(capability, "device.health");
+  bool text_cap = !strcmp(capability, "display.text");
+  if (!args) return !text_cap;
   if (!cJSON_IsObject(args)) return false;
   int n = cJSON_GetArraySize(args);
-  if (!strcmp(capability, "device.health")) return n == 0;
+  if (!text_cap) return n == 0;
   const cJSON *text = field(args, "text");
   return n == 1 && cJSON_IsString(text) && strlen(text->valuestring) <= 4096;
+}
+
+// {mime:"image/jpeg",data:"<standard base64>"} as protocol/v1.md defines it, or hardware_unavailable
+static void snapshot_result(adp_t *adp, cJSON *r) {
+  unsigned char *jpeg = NULL;
+  size_t len = 0;
+  char *b64 = NULL;
+  bool ok = !adp->snapshot(&jpeg, &len, adp->user) && jpeg && len >= 4 && len <= ADP_MAX_SNAPSHOT &&
+            jpeg[0] == 0xFF && jpeg[1] == 0xD8 && jpeg[2] == 0xFF;
+  size_t b64_len = ok ? sodium_base64_ENCODED_LEN(len, sodium_base64_VARIANT_ORIGINAL) : 0;
+  if (ok && (b64 = malloc(b64_len))) sodium_bin2base64(b64, b64_len, jpeg, len, sodium_base64_VARIANT_ORIGINAL);
+  free(jpeg);
+  cJSON *v = b64 ? cJSON_CreateObject() : NULL;
+  if (v && cJSON_AddStringToObject(v, "mime", "image/jpeg") && cJSON_AddStringToObject(v, "data", b64)) {
+    cJSON_AddTrueToObject(r, "ok");
+    cJSON_AddItemToObject(r, "value", v);
+  } else {
+    cJSON_Delete(v);
+    cJSON_AddFalseToObject(r, "ok");
+    cJSON_AddStringToObject(r, "error", "hardware_unavailable");
+  }
+  free(b64);
 }
 
 static cJSON *invoke(adp_t *adp, const cJSON *msg, cJSON *r) {
   static const char *allowed[] = {"to", "id", "challenge", "type", "capability", "args"};
   const cJSON *cap = field(msg, "capability"), *args = field(msg, "args"), *k;
   bool ok = cJSON_IsString(cap) &&
-            (!strcmp(cap->valuestring, "device.health") || (adp->show_text && !strcmp(cap->valuestring, "display.text")));
+            (!strcmp(cap->valuestring, "device.health") || (adp->show_text && !strcmp(cap->valuestring, "display.text")) ||
+             (adp->snapshot && !strcmp(cap->valuestring, "camera.snapshot")));
   cJSON_ArrayForEach(k, msg) {
     bool known = false;
     for (size_t i = 0; i < sizeof allowed / sizeof *allowed; i++) known |= !strcmp(k->string, allowed[i]);
@@ -252,6 +281,8 @@ static cJSON *invoke(adp_t *adp, const cJSON *msg, cJSON *r) {
     cJSON *v = cJSON_AddObjectToObject(r, "value");
     cJSON_AddStringToObject(v, "status", "ok");
     cJSON_AddStringToObject(v, "platform", adp->platform);
+  } else if (!strcmp(cap->valuestring, "camera.snapshot")) {
+    snapshot_result(adp, r);
   } else if (adp->show_text(field(args, "text")->valuestring, adp->user)) {
     cJSON_AddFalseToObject(r, "ok");
     cJSON_AddStringToObject(r, "error", "hardware_unavailable");

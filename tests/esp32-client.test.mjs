@@ -44,14 +44,14 @@ test("the C core signs byte for byte like the SDK", { skip }, () => {
   assert.deepEqual(open(packet, key), body);
 });
 
-async function connect(t, { agent = AGENT, pinned = AGENT, display = true, secure = false, isHome } = {}) {
+async function connect(t, { agent = AGENT, pinned = AGENT, display = true, camera = false, secure = false, isHome } = {}) {
   const owner = identity();
   const deviceKey = run(["key", SEED]);
   const hub = new ReverseHub({ identity: owner, getDevices: () => ({ [deviceKey]: { agent: pinned } }), ...(isHome ? { isHome } : {}) });
   hub.server.listen(0, "127.0.0.1");
   await once(hub.server, "listening");
   const origin = "http://127.0.0.1:" + hub.server.address().port;
-  const child = spawn(bin, ["bridge", SEED, owner.key, agent, ...(display ? ["display"] : []), ...(secure ? ["secure"] : [])]);
+  const child = spawn(bin, ["bridge", SEED, owner.key, agent, ...(display ? ["display"] : []), ...(camera ? ["camera"] : []), ...(secure ? ["secure"] : [])]);
   const shown = [];
   createInterface({ input: child.stderr }).on("line", (l) => shown.push(l));
   // Stands in for the ESP32's Wi-Fi and WebSocket: one frame per line each way ("T text" or "B hex" when secure)
@@ -186,6 +186,32 @@ test("the C core connects to the SDK hub through /v1/secure from a home network 
   const r = await exchange(s.endpoint, s.owner, s.deviceKey, { type: "invoke", capability: "display.text", args: { text: "Hola desde casa" } }, "result");
   assert.deepEqual(r.value, { shown: true });
   assert.deepEqual(s.shown, ["SHOW Hola desde casa"]);
+});
+
+test("the C core sends a camera snapshot through /v1/secure from a home network address", { skip }, async (t) => {
+  const s = await connect(t, { secure: true, camera: true, isHome: () => true });
+  await once(s.hub, "connected");
+  const reg = await call(s.endpoint, s.owner, s.deviceKey);
+  assert.ok(reg.capabilities.includes("camera.snapshot"));
+  assert.equal(reg.capabilityDefinitions["camera.snapshot"].activation, "active");
+  assert.equal(reg.permissions.camera, true);
+  const r = await call(s.endpoint, s.owner, s.deviceKey, "camera.snapshot");
+  assert.equal(r.ok, true);
+  assert.equal(r.value.mime, "image/jpeg");
+  const jpeg = Buffer.from(r.value.data, "base64");
+  assert.equal(jpeg.length, 300 * 1024);
+  assert.deepEqual([...jpeg.subarray(0, 3)], [0xff, 0xd8, 0xff]);
+  const bad = await exchange(s.endpoint, s.owner, s.deviceKey, { type: "invoke", capability: "camera.snapshot", args: { quality: 1 } }, "result");
+  assert.equal(bad.error, "invalid_arguments");
+});
+
+test("the C core offers no camera without the owner's grant", { skip }, async (t) => {
+  const s = await connect(t, { secure: true, isHome: () => true });
+  await once(s.hub, "connected");
+  const reg = await call(s.endpoint, s.owner, s.deviceKey);
+  assert.ok(!reg.capabilities.includes("camera.snapshot"));
+  const r = await exchange(s.endpoint, s.owner, s.deviceKey, { type: "invoke", capability: "camera.snapshot" }, "result");
+  assert.equal(r.error, "denied");
 });
 
 test("the hub refuses the C core on /v1/secure when it names another agent", { skip }, async (t) => {

@@ -45,4 +45,13 @@ menu "Agent Device Protocol"
             adp_board_show_text() for it. Turning it on is the owner's local
             grant for display.text.
 
+    config ADP_CAMERA
+        bool "Offer camera.snapshot (Seeed XIAO ESP32-S3 Sense)"
+        default n
+        depends on IDF_TARGET_ESP32S3 && SPIRAM
+        help
+            Turn on only for a XIAO ESP32-S3 Sense with its camera board attached.
+            Turning it on is the owner's local grant for camera.snapshot. The user
+            LED is the capture sign: the camera runs only while it is on.
+
 endmenu
