@@ -174,8 +174,17 @@ static void setup_mode(void) {
   network_prov_security2_params_t sec = {.salt = salt, .salt_len = 16, .verifier = verifier, .verifier_len = verifier_len};
   network_prov_mgr_config_t cfg = {.scheme = network_prov_scheme_ble, .scheme_event_handler = NETWORK_PROV_EVENT_HANDLER_NONE};
   xEventGroupClearBits(ev, SETUP_DONE);
+  // Wi-Fi and Bluetooth share the radio: Bluetooth needs Wi-Fi modem sleep, or the phone loses the link as soon as the
+  // board joins. The speaker build turns modem sleep off for fast speech; it goes back after the setup mode.
+  wifi_ps_type_t ps = WIFI_PS_MIN_MODEM;
+  esp_wifi_get_ps(&ps);
+  esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
   if (network_prov_mgr_init(cfg) == ESP_OK) {
     esp_event_handler_register(NETWORK_PROV_EVENT, ESP_EVENT_ANY_ID, on_prov, NULL);
+    // When the phone reads "connected", the manager closes Bluetooth after this delay (1 s by default): too soon for
+    // the answer to reach a phone on macOS
+    esp_err_t no_auto = network_prov_mgr_disable_auto_stop(5000);
+    if (no_auto) ESP_LOGW(TAG, "Setup mode: the manager will stop by itself (%s)", esp_err_to_name(no_auto));
     if (network_prov_mgr_start_provisioning(NETWORK_PROV_SECURITY_2, &sec, name, NULL) == ESP_OK) {
       printf("\nSetup mode: Bluetooth name %s, setup code %s\n", name, code);  // USB console only
       ESP_LOGW(TAG, "No known network: setup mode open on Bluetooth as %s for %d minutes", name, SETUP_MS / 60000);
@@ -184,11 +193,12 @@ static void setup_mode(void) {
       ESP_LOGI(TAG, "Setup mode: %s", done ? "joined the new network" : "closed after 10 minutes");
       adp_sign_setup(false);
       network_prov_mgr_stop_provisioning();
-      vTaskDelay(pdMS_TO_TICKS(1000));  // the manager answers the phone before it stops
+      if (done) vTaskDelay(pdMS_TO_TICKS(12000));  // so the phone reads "connected" before Bluetooth closes
     }
     esp_event_handler_unregister(NETWORK_PROV_EVENT, ESP_EVENT_ANY_ID, on_prov);
     network_prov_mgr_deinit();
   }
+  esp_wifi_set_ps(ps);
   free(salt);
   free(verifier);
   memset(code, 0, sizeof code);
