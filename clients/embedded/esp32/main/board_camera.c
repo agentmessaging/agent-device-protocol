@@ -4,21 +4,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "driver/gpio.h"
 #include "esp_camera.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define LED GPIO_NUM_21  // user LED, on at low level
 #define WARMUP_FRAMES 3  // auto exposure settles over the first frames after the camera starts
 
 static const char *TAG = "camera";
-static esp_timer_handle_t led_timer;
-
-static void led(bool on) { gpio_set_level(LED, on ? 0 : 1); }
-static void led_off(void *arg) { led(false); }
+void adp_sign_init(void);  // board_sign.c
+void adp_sign_hold(void);
+void adp_sign_release(int linger_ms);
 
 static esp_err_t start(void) {
   camera_config_t c = {
@@ -34,24 +31,18 @@ static esp_err_t start(void) {
 
 // At boot: the LED pin and timer, and one start and stop of the camera to see that it is there.
 int adp_board_camera_init(void) {
-  gpio_reset_pin(LED);
-  gpio_set_direction(LED, GPIO_MODE_OUTPUT);
-  led(false);
-  esp_timer_create_args_t t = {.callback = led_off, .name = "capture-sign"};
-  if (esp_timer_create(&t, &led_timer) != ESP_OK) return -1;
-  led(true);  // the probe starts the sensor, so it is a capture too and shows the sign
+  adp_sign_init();
+  adp_sign_hold();  // the probe starts the sensor, so it is a capture too and shows the sign
   esp_err_t err = start();
   if (err == ESP_OK) esp_camera_deinit();
-  esp_timer_start_once(led_timer, 3000 * 1000);
+  adp_sign_release(3000);
   if (err != ESP_OK) ESP_LOGE(TAG, "No camera (%s): camera.snapshot is not offered", esp_err_to_name(err));
   return err == ESP_OK ? 0 : -1;
 }
 
 int adp_board_snapshot(unsigned char **jpeg, size_t *len, void *user) {
   (void)user;
-  esp_timer_stop(led_timer);
-  led(true);
-  vTaskDelay(pdMS_TO_TICKS(50));  // the sign is lit before the sensor starts
+  adp_sign_hold();  // the sign is lit before the sensor starts
   int rc = -1;
   if (start() == ESP_OK) {
     camera_fb_t *fb = NULL;
@@ -67,7 +58,7 @@ int adp_board_snapshot(unsigned char **jpeg, size_t *len, void *user) {
     if (fb) esp_camera_fb_return(fb);
     esp_camera_deinit();
   }
-  esp_timer_start_once(led_timer, 3000 * 1000);  // at least three seconds after the picture
+  adp_sign_release(3000);  // at least three seconds after the picture
   if (rc) ESP_LOGW(TAG, "Snapshot failed");
   return rc;
 }

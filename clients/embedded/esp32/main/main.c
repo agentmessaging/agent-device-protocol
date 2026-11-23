@@ -25,10 +25,23 @@ int adp_board_show_text(const char *text, void *user);
 #if CONFIG_ADP_CAMERA
 int adp_board_camera_init(void);  // board_camera.c
 void adp_board_doctor(EventGroupHandle_t wifi, const char *url);  // board_doctor.c
+int adp_board_audio_init(bool microphone, bool speaker);          // board_audio.c
+int adp_board_play(const unsigned char *wav, size_t len, bool *played, void *user);
+bool adp_board_take_talk(unsigned char **wav, size_t *len);
 int adp_board_snapshot(unsigned char **jpeg, size_t *len, void *user);
 #endif
 
 static const char *TAG = "adp";
+#ifdef CONFIG_ADP_MICROPHONE
+#define MICROPHONE_ON true
+#else
+#define MICROPHONE_ON false
+#endif
+#ifdef CONFIG_ADP_SPEAKER
+#define SPEAKER_ON true
+#else
+#define SPEAKER_ON false
+#endif
 typedef struct {
   char *data;  // NULL: the connection ended
   size_t len;
@@ -137,7 +150,7 @@ static bool session(adp_t *adp, const char *uri) {
   esp_websocket_client_config_t config = {
       .uri = uri,
       .disable_auto_reconnect = true,  // reverse.md backoff and refusal rules are applied below
-      .buffer_size = 2048,
+      .buffer_size = 16384,  // also the send fragment size: a clip of 0.8 MB goes out far faster
       .network_timeout_ms = 10000,
       .task_stack = 6144,
   };
@@ -169,6 +182,18 @@ static bool session(adp_t *adp, const char *uri) {
       if (rc) break;
       if (was < 2 && adp->state == 2) ESP_LOGI(TAG, "Connected to the controller for %s", adp->agent);
     }
+#if CONFIG_ADP_MICROPHONE
+    unsigned char *wav, *out;
+    size_t wav_len, out_len;
+    bool out_binary;
+    if (adp->microphone && adp_event_ready(adp) && adp_board_take_talk(&wav, &wav_len)) {
+      if (!adp_audio(adp, wav, wav_len, &out, &out_len, &out_binary)) {
+        esp_websocket_client_send_bin(client, (const char *)out, out_len, pdMS_TO_TICKS(5000 + out_len / 50));
+        free(out);
+      }
+      free(wav);
+    }
+#endif
     if (adp->state < 2 && now_ms() - opened > 5000) break;  // handshake bound
     uint32_t seen = last_rx;  // read before the clock, so a newer frame can't make the difference wrap
     if ((uint32_t)now_ms() - seen > 35000) break;  // controller went silent
@@ -221,7 +246,20 @@ void app_main(void) {
 #endif
   ESP_LOGI(TAG, "Device public key (safe to share): %s", adp.key);
 #if CONFIG_ADP_DOCTOR
+  extern void adp_board_debug_start(void);  // board_debug.c
   adp_board_doctor(wifi, CONFIG_ADP_CONTROLLER_URL);
+  adp_board_debug_start();
+#endif
+#if CONFIG_ADP_MICROPHONE || CONFIG_ADP_SPEAKER
+  // What a person says and what the agent plays never cross a plain home network connection
+  if (!adp.secure)
+    ESP_LOGW(TAG, "The microphone and speaker need the encrypted connection: not offered");
+  else if (!adp_board_audio_init(MICROPHONE_ON, SPEAKER_ON)) {
+    adp.microphone = MICROPHONE_ON;
+#if CONFIG_ADP_SPEAKER
+    adp.play = adp_board_play;
+#endif
+  }
 #endif
 
   static char uri[sizeof CONFIG_ADP_CONTROLLER_URL + 64];

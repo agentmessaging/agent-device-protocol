@@ -87,9 +87,9 @@ DOCTOR speaker    FAIL 1 kHz tone -8.3 dB above the room at the microphone (chec
 DOCTOR camera     PASS 23030 byte JPEG in 771 ms
 ```
 
-The speaker check plays a 1.5 second 1 kHz tone and passes when the microphone hears it at least 15 dB above the room. The LED is on while the microphone or the camera runs. Nothing recorded leaves the board.
+The speaker check plays a 1.5 second 1 kHz tone and passes when the microphone hears it at least 20 dB above the room (electrical noise from the speaker wires alone reached 15 dB in testing). The LED is on while the microphone or the camera runs. Nothing recorded leaves the board.
 
-Wire a MAX98357A amplifier to the XIAO: VIN to 5V, GND to GND, BCLK to D1 (GPIO2), LRC to D4 (GPIO5), DIN to D5 (GPIO6). Leave its SD and GAIN pins unconnected: the board then plays both channels mixed at 9 dB gain. Other pins are menuconfig options. These pins avoid the camera, the microphone (GPIO41/42) and the microSD slot (D8–D10).
+Wire a MAX98357A amplifier to the XIAO: VIN to 5V, GND to GND, BCLK to D1 (GPIO2), LRC to D4 (GPIO5), DIN to D5 (GPIO6). Connect its SD pin to 3V3: many MAX98357A boards stay shut down with SD unconnected (Adafruit's has a pull-up and plays without it). Leave GAIN unconnected for 9 dB gain. Other pins are menuconfig options. These pins avoid the camera, the microphone (GPIO41/42) and the microSD slot (D8–D10).
 
 ## Showing text
 

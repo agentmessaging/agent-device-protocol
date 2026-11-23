@@ -5,6 +5,8 @@
 //       one WebSocket text frame per line on stdin and stdout; display.text goes to stderr; camera answers
 //       camera.snapshot with a fixed 300 KiB JPEG-shaped image. With secure
 //       (S003), each line is "T <text>" or "B <hex>" for a text or binary message.
+//       speaker answers speaker.play (stderr "PLAY <bytes>"); microphone grants the audio event:
+//       with secure, the line "A <bytes>" sends a WAV of that size as one (stdout "NOAUDIO" when it cannot).
 //   adp_host x25519 SECRET_HEX                 print the X25519 public key (S003 test vectors)
 //   adp_host secure-keys SHARED_HEX HELLO_HEX ACCEPT_HEX   print both direction keys
 //   adp_host secure-seal KEY_HEX < text        print the first message sealed with this key, as hex
@@ -31,6 +33,14 @@ static int snapshot(unsigned char **jpeg, size_t *len, void *user) {
   memcpy(*jpeg, "\xFF\xD8\xFF\xE0", 4);
   (*jpeg)[*len - 2] = 0xFF;
   (*jpeg)[*len - 1] = 0xD9;
+  return 0;
+}
+
+static int play(const unsigned char *wav, size_t len, bool *played, void *user) {
+  (void)user;
+  (void)wav;
+  fprintf(stderr, "PLAY %zu\n", len);
+  *played = true;
   return 0;
 }
 
@@ -100,6 +110,8 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[i], "display")) adp.show_text = show;
     if (!strcmp(argv[i], "camera")) adp.snapshot = snapshot;
     if (!strcmp(argv[i], "secure")) adp.secure = true;
+    if (!strcmp(argv[i], "speaker")) adp.play = play;
+    if (!strcmp(argv[i], "microphone")) adp.microphone = true;
   }
   adp_new_session(&adp);
   setvbuf(stdout, NULL, _IOLBF, 0);
@@ -108,6 +120,25 @@ int main(int argc, char **argv) {
     size_t len = strcspn(line, "\n");
     const unsigned char *data = (unsigned char *)line;
     bool binary = false;
+    if (line[0] == 'A' && line[1] == ' ') {  // the person talked: send a WAV of this many bytes
+      size_t n = strtoul(line + 2, NULL, 10);
+      unsigned char *wav = calloc(1, n > 44 ? n : 44), *out;
+      size_t out_len;
+      bool out_binary;
+      memcpy(wav, "RIFF", 4);
+      memcpy(wav + 8, "WAVE", 4);
+      if (adp_audio(&adp, wav, n, &out, &out_len, &out_binary)) {
+        puts("NOAUDIO");
+      } else {
+        putchar('B');
+        putchar(' ');
+        for (size_t i = 0; i < out_len; i++) printf("%02x", out[i]);
+        putchar('\n');
+        free(out);
+      }
+      free(wav);
+      continue;
+    }
     if (adp.secure) {  // "T <text>" or "B <hex>"
       if (len < 2 || line[1] != ' ' || (line[0] != 'T' && line[0] != 'B')) return 1;
       binary = line[0] == 'B';
