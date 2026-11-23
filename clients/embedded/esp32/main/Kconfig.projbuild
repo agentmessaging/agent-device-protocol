@@ -16,6 +16,24 @@ menu "Agent Device Protocol"
             for example ws://100.64.0.10:23112. Loopback, Tailscale (100.64.0.0/10)
             and private LAN addresses only. No DNS names.
 
+    config ADP_RELAY_URL
+        string "Controller address through a relay (wss://NAME, S006)"
+        default ""
+        help
+            For a board that travels: the controller's relay listener published at a public
+            name, for example wss://devices.example.com (a Cloudflare tunnel). Tried after the
+            controller address. TLS with public roots carries it; the encrypted connection
+            (S003) with the pinned keys runs inside. Needs the encrypted connection.
+
+    config ADP_NETWORKS
+        bool "Let the controller add and remove Wi-Fi networks (network grant, S005)"
+        default n
+        help
+            Turning it on is the owner's network grant: network.add, network.remove and
+            network.list over the encrypted connection only. The board keeps up to 8
+            networks and joins the strongest it knows; passwords are never sent back.
+            The network above is always one of them.
+
     config ADP_CONTROLLER_KEY
         string "Controller public key"
         default ""

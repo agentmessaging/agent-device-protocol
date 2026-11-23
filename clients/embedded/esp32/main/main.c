@@ -12,6 +12,7 @@
 #include "esp_timer.h"
 #include "esp_websocket_client.h"
 #include "esp_wifi.h"
+#include "esp_crt_bundle.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/queue.h"
@@ -26,7 +27,11 @@ int adp_board_show_text(const char *text, void *user);
 int adp_board_camera_init(void);  // board_camera.c
 void adp_board_doctor(EventGroupHandle_t wifi, const char *url);  // board_doctor.c
 int adp_board_audio_init(bool microphone, bool speaker);
-bool adp_board_listening(void);          // board_audio.c
+bool adp_board_listening(void);
+void adp_net_start(EventGroupHandle_t wifi);  // networks.c
+int adp_net_add(const char *ssid, const char *password, int *count, void *user);
+int adp_net_remove(const char *ssid, bool *removed, int *count, void *user);
+int adp_net_list(char names[][33], char current[33], void *user);          // board_audio.c
 int adp_board_play(const unsigned char *wav, size_t len, bool *played, void *user);
 bool adp_board_take_talk(unsigned char **wav, size_t *len);
 int adp_board_snapshot(unsigned char **jpeg, size_t *len, void *user);
@@ -60,15 +65,6 @@ static char refusal[32];
 
 static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
 
-static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data) {
-  if (base == WIFI_EVENT && (id == WIFI_EVENT_STA_START || id == WIFI_EVENT_STA_DISCONNECTED)) {
-    xEventGroupClearBits(wifi, 1);
-    esp_wifi_connect();
-  } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
-    xEventGroupSetBits(wifi, 1);
-  }
-}
-
 static void start_wifi(void) {
   wifi = xEventGroupCreate();
   ESP_ERROR_CHECK(esp_netif_init());
@@ -76,13 +72,8 @@ static void start_wifi(void) {
   esp_netif_create_default_wifi_sta();
   wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK(esp_wifi_init(&init));
-  ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, on_wifi, NULL));
-  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_wifi, NULL));
-  wifi_config_t config = {0};
-  strlcpy((char *)config.sta.ssid, CONFIG_ADP_WIFI_SSID, sizeof config.sta.ssid);
-  strlcpy((char *)config.sta.password, CONFIG_ADP_WIFI_PASSWORD, sizeof config.sta.password);
+  adp_net_start(wifi);  // networks.c: which network to join, and the bit main waits for
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &config));
   ESP_ERROR_CHECK(esp_wifi_start());
 #if CONFIG_ADP_SPEAKER
   // Modem sleep holds each packet until the next beacon: 330 KB of speech took 5 s, too slow for a sentence
@@ -110,6 +101,12 @@ static void device_key(unsigned char sk[64]) {
 }
 
 // protocol/reverse.md allows Tailscale, loopback and, with limits, private network addresses (Home network connections).
+// S006: a relay is wss://NAME[:PORT] with no path; TLS with public roots carries it, S003 inside is the trust
+static bool relay_url(const char *url) {
+  const char *host = url + 6;
+  return !strncmp(url, "wss://", 6) && *host && !strpbrk(host, "/@?#") && strlen(url) < 200;
+}
+
 static bool private_url(const char *url) {
   unsigned a, b, c, d, port;
   char rest;
@@ -159,6 +156,7 @@ static void on_ws(void *arg, esp_event_base_t base, int32_t id, void *event) {
 static bool session(adp_t *adp, const char *uri) {
   esp_websocket_client_config_t config = {
       .uri = uri,
+      .crt_bundle_attach = strncmp(uri, "wss://", 6) ? NULL : esp_crt_bundle_attach,
       .disable_auto_reconnect = true,  // reverse.md backoff and refusal rules are applied below
       .buffer_size = 16384,  // also the send fragment size: a clip of 0.8 MB goes out far faster
       .network_timeout_ms = 10000,
@@ -219,8 +217,11 @@ static bool session(adp_t *adp, const char *uri) {
 }
 
 void app_main(void) {
-  if (!*CONFIG_ADP_WIFI_SSID || !private_url(CONFIG_ADP_CONTROLLER_URL)) {
-    ESP_LOGE(TAG, "Set Wi-Fi and a ws://PRIVATE_IPV4:PORT controller address in menuconfig");
+  // A home address, a relay, or both (home first); a relay needs the encrypted connection
+  bool home = private_url(CONFIG_ADP_CONTROLLER_URL), relay = relay_url(CONFIG_ADP_RELAY_URL);
+  if ((*CONFIG_ADP_CONTROLLER_URL && !home) || (*CONFIG_ADP_RELAY_URL && (!relay || !CONFIG_ADP_SECURE)) ||
+      (!home && !relay)) {
+    ESP_LOGE(TAG, "Set a ws://PRIVATE_IPV4:PORT controller address and/or a wss://NAME relay in menuconfig");
     return;
   }
   esp_err_t err = nvs_flash_init();  // with CONFIG_NVS_ENCRYPTION this opens the encrypted partition
@@ -246,6 +247,11 @@ void app_main(void) {
   adp.secure = true;
 #else
   ESP_LOGW(TAG, "Plain connection: at a home network address only health and screen text are allowed");
+#endif
+#if CONFIG_ADP_NETWORKS
+  adp.net_add = adp_net_add;  // offered only on the encrypted connection (adp.c)
+  adp.net_remove = adp_net_remove;
+  adp.net_list = adp_net_list;
 #endif
 #if CONFIG_ADP_DISPLAY_TEXT
   adp.show_text = adp_board_show_text;
@@ -277,14 +283,18 @@ void app_main(void) {
   }
 #endif
 
-  static char uri[sizeof CONFIG_ADP_CONTROLLER_URL + 64];
   // S003: an encrypted device never connects to /v1/connect, so nobody on the network can force it down
-  snprintf(uri, sizeof uri, "%s/v1/%s/%s", CONFIG_ADP_CONTROLLER_URL, adp.secure ? "secure" : "connect", adp.key);
+  static char uris[2][256];
+  int n_uris = 0, at = 0;
+  if (home) snprintf(uris[n_uris++], 256, "%s/v1/%s/%s", CONFIG_ADP_CONTROLLER_URL, adp.secure ? "secure" : "connect", adp.key);
+  if (relay) snprintf(uris[n_uris++], 256, "%s/v1/secure/%s", CONFIG_ADP_RELAY_URL, adp.key);
   // reverse.md: backoff from one to thirty seconds plus up to 25% jitter, reset by a good session;
   // after a final refusal, two more tries, then stop until the owner restarts the board.
   int backoff = 1000, refused = 0;
   for (;;) {
     xEventGroupWaitBits(wifi, 1, pdFALSE, pdTRUE, portMAX_DELAY);
+    const char *uri = uris[at];
+    ESP_LOGI(TAG, "Connecting to %.*s", (int)(strstr(uri, "/v1/") - uri), uri);
     bool ok = session(&adp, uri);
     bool final = http_status == 403 || !strcmp(refusal, "unknown_device") || !strcmp(refusal, "not_owner") ||
                  !strcmp(refusal, "revoked") || !strcmp(refusal, "unsupported_version");
@@ -294,7 +304,13 @@ void app_main(void) {
                *refusal ? refusal : "unknown_device");
       return;
     }
-    if (ok) backoff = 1000;
+    if (ok) {
+      backoff = 1000;
+      at = 0;  // after a good session, home first again
+      continue;
+    }
+    at = (at + 1) % n_uris;
+    if (at) continue;  // the next address at once; the backoff is per round
     ESP_LOGW(TAG, "Disconnected; retrying in about %d s", backoff / 1000);
     vTaskDelay(pdMS_TO_TICKS(backoff + esp_random() % (backoff / 4 + 1)));
     backoff = backoff * 2 > 30000 ? 30000 : backoff * 2;
