@@ -106,6 +106,7 @@ static int record(int16_t *pcm, int nobody_ms, bool followup, const adp_vad_t *r
     adp_vad_frame(&vad, pcm + n, nobody_ms);
   }
   if (pre_frames) adp_vad_restart(&vad);
+  vad.min_speech = followup ? ADP_VAD_MIN_ANSWER : 0;
   bool released = false;
   while (n < MAX_SAMPLES && (fixed ? n < fixed * (RATE / 1000) : end == ADP_VAD_GOING)) {
     if ((err = i2s_channel_read(mic, pcm + n, FRAME * 2, &got, 200)) || got != FRAME * 2) {

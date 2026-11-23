@@ -8,12 +8,19 @@
 #define ADP_VAD_HISTORY 50      // the quiet level is the quietest frame of the last 1.5 s
 #define ADP_VAD_ABOVE_DB 10.0f  // speech is this far above the quiet level
 #define ADP_VAD_QUIET_END_MS 1000
+// Speech is at least this loud (after the low cut, before the recording's gain). Measured on the XIAO's PDM mic
+// (2026-11-23): voices at arm's length -53 to -55 dBFS at their loudest, room noise -66 to -70. At the old -70 a quiet
+// room's noise counted as speech in the answer window, and the agent answered words nobody said, in a loop.
+#define ADP_VAD_MIN_DB -62.0f
+#define ADP_VAD_MIN_SPEECH 5  // frames (150 ms) of speech before a person counts as having spoken
+#define ADP_VAD_MIN_ANSWER 13  // in the answer window, which nobody opened on purpose: 400 ms (a clack was 2 x 200 ms)
 
 typedef struct {
   float hp_x, hp_y;  // high-pass filter state
   float history[ADP_VAD_HISTORY];
-  int frames, quiet_ms, since;  // since: frames since the last (re)start, for the nobody limit
+  int frames, quiet_ms, since, speech;  // since: frames since the last (re)start, for the nobody limit
   bool spoke;
+  int min_speech;  // frames needed; 0 means ADP_VAD_MIN_SPEECH
   float quiet_db;
 } adp_vad_t;
 

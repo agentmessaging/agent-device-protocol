@@ -7,6 +7,7 @@ void adp_vad_init(adp_vad_t *v) { memset(v, 0, sizeof *v); }
 
 void adp_vad_restart(adp_vad_t *v) {
   v->spoke = false;
+  v->speech = 0;
   v->quiet_ms = 0;
   v->since = 0;
 }
@@ -44,9 +45,10 @@ int adp_vad_frame(adp_vad_t *v, const int16_t *s, int nobody_ms) {
   float quiet = sorted[k];
   v->quiet_db = quiet;
   // The first 300 ms only learn the room
-  bool speech = v->frames > 10 && db > quiet + ADP_VAD_ABOVE_DB && db > -70;
+  bool speech = v->frames > 10 && db > quiet + ADP_VAD_ABOVE_DB && db > ADP_VAD_MIN_DB;
   if (speech) {
-    v->spoke = true;
+    // A click or a short noise is not a person talking
+    if (++v->speech >= (v->min_speech ? v->min_speech : ADP_VAD_MIN_SPEECH)) v->spoke = true;
     v->quiet_ms = 0;
   } else if (v->spoke && (v->quiet_ms += 30) >= ADP_VAD_QUIET_END_MS) {
     return ADP_VAD_DONE;

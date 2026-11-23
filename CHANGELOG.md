@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- ESP32 client: room noise no longer counts as speech. Speech must reach -62 dBFS (was -70) and last 150 ms; in the answer window after the agent speaks, 400 ms. In a quiet room the old floor let faint noise and a clack through, the speech-to-text made words of it, and the agent answered in a loop. Measured on the board: voices at arm's length -53 to -55 dBFS, room noise -66 to -70.
 - ESP32 client: a new owner (controller key or agent) gets a new Bluetooth setup code with the networks erased; the debug console's `setup-code` makes a new one at once, shown only on the USB console.
 - Protocol: a device plays `speaker.play` and `speaker.say` calls in the order it receives them; a call that arrives during playback waits, so a controller can send the next sentence early and speech has no gaps. The Linux kiosk now queues them (it played them over each other); the ESP32 client already handled them one at a time.
 - ESP32 client: the Bluetooth setup mode now ends cleanly: the phone reads "connected" before Bluetooth closes (a 5 s cleanup delay; it was 1 s), and Wi-Fi uses modem sleep while Bluetooth is on. Tested with esp_prov on a Mac: "Provisioning was successful".
