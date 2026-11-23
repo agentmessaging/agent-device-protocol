@@ -100,6 +100,14 @@ menu "Agent Device Protocol"
         help
             A button to ground. GPIO0 is the BOOT button.
 
+    config ADP_CAMERA_FLIP
+        bool "Camera mounted upside down: turn the picture 180 degrees"
+        default n
+        depends on ADP_CAMERA
+        help
+            The sensor flips and mirrors the picture before it is encoded, so the agent sees it
+            the right way up. For a board mounted upside down, as in a toy.
+
     config ADP_LISTEN
         bool "Listen for a wake phrase (no button needed)"
         default n

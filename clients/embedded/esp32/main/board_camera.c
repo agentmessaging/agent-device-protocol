@@ -26,7 +26,16 @@ static esp_err_t start(void) {
       .pixel_format = PIXFORMAT_JPEG, .frame_size = FRAMESIZE_XGA, .jpeg_quality = 12,
       .fb_count = 1, .fb_location = CAMERA_FB_IN_PSRAM, .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
   };
-  return esp_camera_init(&c);
+  esp_err_t err = esp_camera_init(&c);
+#if CONFIG_ADP_CAMERA_FLIP
+  // The sensor turns the picture itself, before JPEG: a board mounted upside down in a toy (2026-11-23)
+  sensor_t *s = err == ESP_OK ? esp_camera_sensor_get() : NULL;
+  if (s) {
+    s->set_vflip(s, 1);
+    s->set_hmirror(s, 1);
+  }
+#endif
+  return err;
 }
 
 // At boot: the LED pin and timer, and one start and stop of the camera to see that it is there.
