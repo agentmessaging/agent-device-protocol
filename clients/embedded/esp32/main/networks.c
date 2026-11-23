@@ -292,7 +292,14 @@ int adp_net_remove(const char *ssid, bool *removed, int *count, void *user) {
   return 0;
 }
 
-int adp_net_list(char names[][33], char cur[33], void *user) {
+int adp_net_list(char names[][33], char cur[33], char setup[16], void *user) {
+  setup[0] = 0;
+#if CONFIG_ADP_SETUP_MODE
+  char code[10] = "";
+  setup_code(code);  // made now if it does not exist yet, so the owner's app has it before the board travels
+  strlcpy(setup, code, 16);
+  memset(code, 0, sizeof code);
+#endif
   xSemaphoreTake(mu, portMAX_DELAY);
   for (int i = 0; i < nets.n; i++) strlcpy(names[i], nets.e[i].ssid, 33);
   strlcpy(cur, (xEventGroupGetBits(ev) & CONNECTED) ? current : "", 33);

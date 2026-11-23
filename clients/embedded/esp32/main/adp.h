@@ -41,8 +41,9 @@ typedef struct {
   // (hardware_unavailable); *count is how many networks are stored afterwards.
   int (*net_add)(const char *ssid, const char *password, int *count, void *user);
   int (*net_remove)(const char *ssid, bool *removed, int *count, void *user);
-  // Up to ADP_NETWORKS names, and the one in use ("" for none). Returns how many, or -1.
-  int (*net_list)(char names[][33], char current[33], void *user);
+  // Up to ADP_NETWORKS names, the one in use ("" for none) and the Bluetooth setup code ("" without a setup mode),
+  // which only the owner's controller may read (S005). Returns how many networks, or -1.
+  int (*net_list)(char names[][33], char current[33], char setup[16], void *user);
   const char *wake_phrase;  // set while the owner's listen grant is on (S004); needs microphone
   void *user;
   // S003: connect through /v1/secure and refuse anything that is not encrypted
