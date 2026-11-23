@@ -229,6 +229,10 @@ static cJSON *registration(adp_t *adp, cJSON *r) {
     cJSON_AddTrueToObject(perm, "speaker.play");
   }
   if (adp->microphone) cJSON_AddTrueToObject(perm, "microphone");
+  if (adp->microphone && adp->wake_phrase) {  // S004: tells the agent what people say; grants nothing
+    cJSON_AddTrueToObject(perm, "listen");
+    cJSON_AddStringToObject(r, "wakePhrase", adp->wake_phrase);
+  }
   cJSON_AddItemToObject(r, "capabilities", caps);
   cJSON_AddItemToObject(r, "capabilityDefinitions", defs);
   cJSON_AddItemToObject(r, "streams", cJSON_CreateArray());

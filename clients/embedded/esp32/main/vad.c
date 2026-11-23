@@ -5,6 +5,12 @@
 
 void adp_vad_init(adp_vad_t *v) { memset(v, 0, sizeof *v); }
 
+void adp_vad_restart(adp_vad_t *v) {
+  v->spoke = false;
+  v->quiet_ms = 0;
+  v->since = 0;
+}
+
 void adp_vad_highpass(adp_vad_t *v, int16_t *s, int n) {
   const float a = 0.944f;  // one pole, RC / (RC + 1/16000) for a corner near 150 Hz
   for (int i = 0; i < n; i++) {
@@ -21,6 +27,7 @@ int adp_vad_frame(adp_vad_t *v, const int16_t *s, int nobody_ms) {
   float db = 20 * log10f(sqrtf(sum / ADP_VAD_FRAME) / 32768 + 1e-9f);
   v->history[v->frames % ADP_VAD_HISTORY] = db;
   v->frames++;
+  v->since++;
   // The room is one of the quietest frames of the last 1.5 s: speech always has short pauses, so talking
   // cannot raise it, and it rises with a steady sound such as a fan. The 5th quietest, not the quietest:
   // one freak frame once dragged the level so low that the whole room counted as speech (20 s recorded).
@@ -44,6 +51,6 @@ int adp_vad_frame(adp_vad_t *v, const int16_t *s, int nobody_ms) {
   } else if (v->spoke && (v->quiet_ms += 30) >= ADP_VAD_QUIET_END_MS) {
     return ADP_VAD_DONE;
   }
-  if (!v->spoke && v->frames * 30 >= nobody_ms) return ADP_VAD_NOBODY;
+  if (!v->spoke && v->since * 30 >= nobody_ms) return ADP_VAD_NOBODY;
   return ADP_VAD_GOING;
 }

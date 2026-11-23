@@ -35,6 +35,7 @@ typedef struct {
   int (*play)(const unsigned char *wav, size_t len, bool *played, void *user);
   // The owner's microphone grant: advertised, and needed for adp_audio().
   bool microphone;
+  const char *wake_phrase;  // set while the owner's listen grant is on (S004); needs microphone
   void *user;
   // S003: connect through /v1/secure and refuse anything that is not encrypted
   bool secure;

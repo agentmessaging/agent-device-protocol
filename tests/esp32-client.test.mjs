@@ -45,14 +45,14 @@ test("the C core signs byte for byte like the SDK", { skip }, () => {
   assert.deepEqual(open(packet, key), body);
 });
 
-async function connect(t, { agent = AGENT, pinned = AGENT, display = true, camera = false, secure = false, isHome, speaker = false, microphone = false, onAudio } = {}) {
+async function connect(t, { agent = AGENT, pinned = AGENT, display = true, camera = false, secure = false, isHome, speaker = false, microphone = false, listen = false, onAudio } = {}) {
   const owner = identity();
   const deviceKey = run(["key", SEED]);
   const hub = new ReverseHub({ identity: owner, getDevices: () => ({ [deviceKey]: { agent: pinned } }), ...(isHome ? { isHome } : {}), ...(onAudio ? { onAudio } : {}) });
   hub.server.listen(0, "127.0.0.1");
   await once(hub.server, "listening");
   const origin = "http://127.0.0.1:" + hub.server.address().port;
-  const child = spawn(bin, ["bridge", SEED, owner.key, agent, ...(display ? ["display"] : []), ...(camera ? ["camera"] : []), ...(secure ? ["secure"] : []), ...(speaker ? ["speaker"] : []), ...(microphone ? ["microphone"] : [])]);
+  const child = spawn(bin, ["bridge", SEED, owner.key, agent, ...(display ? ["display"] : []), ...(camera ? ["camera"] : []), ...(secure ? ["secure"] : []), ...(speaker ? ["speaker"] : []), ...(microphone ? ["microphone"] : []), ...(listen ? ["listen"] : [])]);
   const shown = [], refused = [];
   createInterface({ input: child.stderr }).on("line", (l) => shown.push(l));
   // Stands in for the ESP32's Wi-Fi and WebSocket: one frame per line each way ("T text" or "B hex" when secure)
@@ -267,6 +267,20 @@ test("the C core sends what a person said as a signed audio event", { skip }, as
   await new Promise((r) => setTimeout(r, 100));
   assert.deepEqual(s.refused, ["NOAUDIO"]);
   assert.equal(heard.length, 2);
+});
+
+test("the C core registers the listen grant and its wake phrase only with the microphone grant", { skip }, async (t) => {
+  const a = await connect(t, { secure: true, microphone: true, listen: true, isHome: () => true });
+  await once(a.hub, "connected");
+  const listed = await call(a.endpoint, a.owner, a.deviceKey);
+  assert.equal(listed.permissions.listen, true);
+  assert.equal(listed.permissions.microphone, true);
+  assert.equal(listed.wakePhrase, "hey bruce");
+  const b = await connect(t, { secure: true, listen: true, isHome: () => true });
+  await once(b.hub, "connected");
+  const none = await call(b.endpoint, b.owner, b.deviceKey);
+  assert.equal(none.permissions.listen, undefined);
+  assert.equal(none.wakePhrase, undefined);
 });
 
 test("the C core sends no audio without the microphone grant or over a plain connection", { skip }, async (t) => {

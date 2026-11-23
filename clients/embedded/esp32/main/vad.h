@@ -12,7 +12,7 @@
 typedef struct {
   float hp_x, hp_y;  // high-pass filter state
   float history[ADP_VAD_HISTORY];
-  int frames, quiet_ms;
+  int frames, quiet_ms, since;  // since: frames since the last (re)start, for the nobody limit
   bool spoke;
   float quiet_db;
 } adp_vad_t;
@@ -20,6 +20,8 @@ typedef struct {
 enum { ADP_VAD_GOING = 0, ADP_VAD_DONE = 1, ADP_VAD_NOBODY = 2 };
 
 void adp_vad_init(adp_vad_t *v);
+// A new utterance that keeps the room level learned so far (the board listened before it recorded)
+void adp_vad_restart(adp_vad_t *v);
 // One frame of ADP_VAD_FRAME samples. Returns ADP_VAD_DONE one second after speech ended, ADP_VAD_NOBODY
 // when nobody spoke within nobody_ms, otherwise ADP_VAD_GOING.
 int adp_vad_frame(adp_vad_t *v, const int16_t *s, int nobody_ms);

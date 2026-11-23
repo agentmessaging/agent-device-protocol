@@ -15,6 +15,8 @@ Updated: 2026-11-22. Proposed work below is **not implemented** by these documen
 - [S002 — Kiosk memory and lifecycle reliability](specs/S002-kiosk-memory-lifecycle.md): issue #20 investigation, bounded resources and soak acceptance; proposed.
 - [S003 — Encrypted home network connection](specs/S003-encrypted-home-network-connection.md): signed X25519 key exchange and encrypted messages for boards that cannot run Tailscale; implemented in the SDK, ESP32 pending.
 - [S004 — Listening for a wake phrase](specs/S004-wake-phrase-listening.md): a local listening state with its own grant and sign, so a person can say the agent's name instead of pressing a button; proposed.
+- [S005 — Wi-Fi networks for a device that travels](specs/S005-device-networks.md): `network.add`, `network.remove` and `network.list` with a local grant, and a Bluetooth setup mode for the owner's phone; proposed.
+- [S006 — Connecting through a public relay](specs/S006-public-relay.md): `wss://` with S003 inside, and a separate relay listener that never gives loopback trust; proposed.
 
 ## Work items
 
