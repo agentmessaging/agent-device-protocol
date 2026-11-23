@@ -21,7 +21,7 @@ try {
   bin = join(mkdtempSync(join(tmpdir(), "adp-esp32-")), "adp_host");
   const flags = execFileSync("pkg-config", ["--cflags", "--libs", "libsodium", "libcjson"], { encoding: "utf8" });
   // The firmware sets the same larger frame limit when the speaker is on (speaker.play needs about 1 MiB)
-  execFileSync("cc", ["-Wall", "-Werror", "-O1", "-DADP_MAX_FRAME=1100000", "-o", bin, src + "main/adp.c", src + "host/adp_host.c", ...flags.trim().split(/\s+/)]);
+  execFileSync("cc", ["-Wall", "-Werror", "-O1", "-DADP_MAX_FRAME=1100000", "-o", bin, src + "main/adp.c", src + "main/nets.c", src + "host/adp_host.c", ...flags.trim().split(/\s+/)]);
 } catch (error) {
   skip = "C toolchain, libsodium or cJSON unavailable: " + error.message.split("\n")[0];
 }
@@ -45,14 +45,14 @@ test("the C core signs byte for byte like the SDK", { skip }, () => {
   assert.deepEqual(open(packet, key), body);
 });
 
-async function connect(t, { agent = AGENT, pinned = AGENT, display = true, camera = false, secure = false, isHome, speaker = false, microphone = false, listen = false, onAudio } = {}) {
+async function connect(t, { agent = AGENT, pinned = AGENT, display = true, camera = false, secure = false, isHome, speaker = false, microphone = false, listen = false, network = false, onAudio } = {}) {
   const owner = identity();
   const deviceKey = run(["key", SEED]);
   const hub = new ReverseHub({ identity: owner, getDevices: () => ({ [deviceKey]: { agent: pinned } }), ...(isHome ? { isHome } : {}), ...(onAudio ? { onAudio } : {}) });
   hub.server.listen(0, "127.0.0.1");
   await once(hub.server, "listening");
   const origin = "http://127.0.0.1:" + hub.server.address().port;
-  const child = spawn(bin, ["bridge", SEED, owner.key, agent, ...(display ? ["display"] : []), ...(camera ? ["camera"] : []), ...(secure ? ["secure"] : []), ...(speaker ? ["speaker"] : []), ...(microphone ? ["microphone"] : []), ...(listen ? ["listen"] : [])]);
+  const child = spawn(bin, ["bridge", SEED, owner.key, agent, ...(display ? ["display"] : []), ...(camera ? ["camera"] : []), ...(secure ? ["secure"] : []), ...(speaker ? ["speaker"] : []), ...(microphone ? ["microphone"] : []), ...(listen ? ["listen"] : []), ...(network ? ["network"] : [])]);
   const shown = [], refused = [];
   createInterface({ input: child.stderr }).on("line", (l) => shown.push(l));
   // Stands in for the ESP32's Wi-Fi and WebSocket: one frame per line each way ("T text" or "B hex" when secure)
@@ -241,6 +241,40 @@ test("the C core plays speaker.play through /v1/secure and checks the WAV", { sk
   assert.equal((await play({ mime: "audio/wav", data: wav(1000), volume: 1 })).error, "invalid_arguments");
   assert.equal((await play({ mime: "audio/wav", data: wav(1000) + "\n" })).error, "invalid_arguments");
   assert.equal(s.shown.length, 1);
+});
+
+test("the C core stores Wi-Fi networks through /v1/secure and never answers with a password (S005)", { skip }, async (t) => {
+  const s = await connect(t, { secure: true, network: true, isHome: () => true });
+  await once(s.hub, "connected");
+  const reg = await call(s.endpoint, s.owner, s.deviceKey);
+  for (const c of ["network.add", "network.remove", "network.list"]) {
+    assert.ok(reg.capabilities.includes(c));
+    assert.deepEqual(reg.capabilityDefinitions[c], builtinCapabilities[c]);
+  }
+  assert.equal(reg.permissions.network, true);
+  const net = (capability, args) => exchange(s.endpoint, s.owner, s.deviceKey, { type: "invoke", capability, args }, "result");
+  for (let i = 1; i <= 8; i++) assert.deepEqual((await net("network.add", { ssid: "Net " + i, password: "secret-" + i })).value, { stored: true, count: i });
+  // A 9th replaces the one used least recently: the first
+  assert.deepEqual((await net("network.add", { ssid: "Hotel", password: "hotel-pass" })).value, { stored: true, count: 8 });
+  const list = await net("network.list", {});
+  assert.equal(list.value.networks.length, 8);
+  assert.ok(!list.value.networks.some((n) => n.ssid === "Net 1"));
+  assert.ok(list.value.networks.some((n) => n.ssid === "Hotel"));
+  assert.ok(!JSON.stringify(list).includes("secret-") && !JSON.stringify(list).includes("hotel-pass"));
+  assert.deepEqual((await net("network.remove", { ssid: "Hotel" })).value, { removed: true, count: 7 });
+  assert.deepEqual((await net("network.remove", { ssid: "Hotel" })).value, { removed: false, count: 7 });
+  assert.equal((await net("network.add", { ssid: "", password: "x" })).error, "invalid_arguments");
+  assert.equal((await net("network.add", { ssid: "A", password: "p".repeat(64) })).error, "invalid_arguments");
+  assert.equal((await net("network.add", { ssid: "A" })).error, "invalid_arguments");
+  assert.equal((await net("network.list", { all: true })).error, "invalid_arguments");
+});
+
+test("the C core offers no network capabilities over a plain connection", { skip }, async (t) => {
+  const s = await connect(t, { network: true });
+  await once(s.hub, "connected");
+  const reg = await call(s.endpoint, s.owner, s.deviceKey);
+  assert.ok(!reg.capabilities.includes("network.add"));
+  assert.equal(reg.permissions.network, undefined);
 });
 
 test("the C core sends what a person said as a signed audio event", { skip }, async (t) => {

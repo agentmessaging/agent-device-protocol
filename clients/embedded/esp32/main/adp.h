@@ -14,6 +14,7 @@
 #define ADP_MAX_SNAPSHOT (1024 * 1024)  // largest JPEG sent (S003): fits the profile's 2,200,000-byte message
 #define ADP_MAX_PLAY (384 * 1024)       // speaker.play WAV (capabilities.md)
 #define ADP_MAX_AUDIO (640 * 1024)      // audio event WAV: 20 s of 16 kHz mono (reverse.md)
+#define ADP_NETWORKS 8                  // Wi-Fi networks a board keeps (S005)
 
 typedef struct {
   unsigned char sk[64];  // libsodium secret key: seed then public key
@@ -35,6 +36,13 @@ typedef struct {
   int (*play)(const unsigned char *wav, size_t len, bool *played, void *user);
   // The owner's microphone grant: advertised, and needed for adp_audio().
   bool microphone;
+  // S005 network.add, network.remove and network.list: the owner's network grant. Offered only when all three
+  // are set and the connection is encrypted. A password never leaves the board. Each returns 0, or -1
+  // (hardware_unavailable); *count is how many networks are stored afterwards.
+  int (*net_add)(const char *ssid, const char *password, int *count, void *user);
+  int (*net_remove)(const char *ssid, bool *removed, int *count, void *user);
+  // Up to ADP_NETWORKS names, and the one in use ("" for none). Returns how many, or -1.
+  int (*net_list)(char names[][33], char current[33], void *user);
   const char *wake_phrase;  // set while the owner's listen grant is on (S004); needs microphone
   void *user;
   // S003: connect through /v1/secure and refuse anything that is not encrypted

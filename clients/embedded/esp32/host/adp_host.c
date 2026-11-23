@@ -16,6 +16,7 @@
 #include <sys/time.h>
 
 #include "../main/adp.h"
+#include "../main/nets.h"
 #include "sodium.h"
 
 static int show(const char *text, void *user) {
@@ -42,6 +43,28 @@ static int play(const unsigned char *wav, size_t len, bool *played, void *user) 
   fprintf(stderr, "PLAY %zu\n", len);
   *played = true;
   return 0;
+}
+
+// S005 on the host: the board's rules in memory; stderr "NETS" lines show what was stored, passwords included,
+// so the test can check the answers never carry them
+static adp_nets_t nets;
+static int net_add(const char *ssid, const char *password, int *count, void *user) {
+  (void)user;
+  *count = adp_nets_add(&nets, ssid, password);
+  fprintf(stderr, "NETS add %s %s\n", ssid, password);
+  return 0;
+}
+static int net_remove(const char *ssid, bool *removed, int *count, void *user) {
+  (void)user;
+  *removed = adp_nets_remove(&nets, ssid);
+  *count = nets.n;
+  return 0;
+}
+static int net_list(char names[][33], char current[33], void *user) {
+  (void)user;
+  for (int i = 0; i < nets.n; i++) strcpy(names[i], nets.e[i].ssid);
+  strcpy(current, nets.n ? nets.e[0].ssid : "");
+  return nets.n;
 }
 
 static int64_t now_ms(void) {
@@ -113,6 +136,11 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[i], "speaker")) adp.play = play;
     if (!strcmp(argv[i], "microphone")) adp.microphone = true;
     if (!strcmp(argv[i], "listen")) adp.wake_phrase = "hey bruce";
+    if (!strcmp(argv[i], "network")) {
+      adp.net_add = net_add;
+      adp.net_remove = net_remove;
+      adp.net_list = net_list;
+    }
   }
   adp_new_session(&adp);
   setvbuf(stdout, NULL, _IOLBF, 0);
