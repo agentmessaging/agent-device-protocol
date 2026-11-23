@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed |
-| Date | 2026-11-22 |
+| Date | 2026-11-22; amended 2026-11-23 (B002) |
 | Owner | Unassigned |
 | Work | [F009](../backlog/F009-wake-phrase-listening.md); related [F008](../backlog/F008-esp32-eyes-and-ears.md), [F005](../backlog/F005-kiosk-redesign.md) |
 | Sources | Owner request, 2026-11-22 (a board inside a toy, and the kiosks, must work without pressing a button); [Meta Muse Gadgets SDK](https://github.com/facebookincubator/muse-gadget-sdk), read 2026-11-22: an opt-in "Hey Muse" wake word on the device, off by default, that starts the same voice note as the talk button |
@@ -55,7 +55,7 @@ Not included: a wire change to the `audio` event (old controllers keep working),
 ### From the wake phrase to an `audio` event
 
 1. The detector hears the phrase. The recording sign comes on before recording starts.
-2. Recording starts at the detection. Audio from before the detection, the phrase included, is not sent.
+2. Recording starts at the detection. It MAY include up to 500 ms of audio from just before the detection, because a detector decides after the phrase ends and people do not pause after a name ("Hi Bruce, are you there" lost "are you" on the board without it, [B002](../backlog/B002-first-words-after-wake-phrase-lost.md)). That audio can include the end of the phrase. Audio from earlier is not sent.
 3. Recording ends when the person stops talking (the device chooses a silence between 0.6 and 2 seconds) or at the 20 second limit of the `audio` event.
 4. If the person says nothing within 5 seconds of the phrase, nothing is sent and the device goes back to listening.
 5. The result is the existing `audio` event, unchanged. Saying the wake phrase is the person's choice to talk to the device, so the rule "sent only because the person chose to" still holds.
