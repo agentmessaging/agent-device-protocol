@@ -25,7 +25,8 @@ int adp_board_show_text(const char *text, void *user);
 #if CONFIG_ADP_CAMERA
 int adp_board_camera_init(void);  // board_camera.c
 void adp_board_doctor(EventGroupHandle_t wifi, const char *url);  // board_doctor.c
-int adp_board_audio_init(bool microphone, bool speaker);          // board_audio.c
+int adp_board_audio_init(bool microphone, bool speaker);
+bool adp_board_listening(void);          // board_audio.c
 int adp_board_play(const unsigned char *wav, size_t len, bool *played, void *user);
 bool adp_board_take_talk(unsigned char **wav, size_t *len);
 int adp_board_snapshot(unsigned char **jpeg, size_t *len, void *user);
@@ -267,6 +268,9 @@ void app_main(void) {
     ESP_LOGW(TAG, "The microphone and speaker need the encrypted connection: not offered");
   else if (!adp_board_audio_init(MICROPHONE_ON, SPEAKER_ON)) {
     adp.microphone = MICROPHONE_ON;
+#if CONFIG_ADP_LISTEN
+    if (adp_board_listening()) adp.wake_phrase = CONFIG_ADP_WAKE_PHRASE;
+#endif
 #if CONFIG_ADP_SPEAKER
     adp.play = adp_board_play;
 #endif

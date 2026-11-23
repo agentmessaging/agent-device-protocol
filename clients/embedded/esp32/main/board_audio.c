@@ -4,6 +4,9 @@
 // recording ends after one second of quiet, at a second press, or at 20 seconds, and the clip goes to the
 // controller as one audio event (protocol/reverse.md). Nothing is sent if nobody speaks within 5 seconds.
 // Speaker: a MAX98357A on I2S1. speaker.play stops, with played:false, when a person starts talking.
+// Listening (ADP_LISTEN, S004): the microphone runs all the time through the wake phrase detector (wake.cc)
+// under the dim sign. The phrase starts the same recording as the button. After the agent's speech ends,
+// the board records up to 8 seconds for an answer. No echo cancellation: detection pauses while it plays.
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,16 +25,25 @@
 void adp_sign_init(void);  // board_sign.c
 void adp_sign_hold(void);
 void adp_sign_release(int linger_ms);
+void adp_sign_listening(bool on);
+bool adp_wake_init(void);  // wake.cc
+void adp_wake_reset(void);
+bool adp_wake_feed(const int16_t *s, int n);
+int adp_wake_peak(void);
 
 #define RATE 16000
 #define FRAME 480  // 30 ms
 #define MAX_SAMPLES (RATE * 20 - FRAME)  // under the audio event's 20 seconds
 #define NOBODY_MS 5000
 #define STALE_MS 10000  // a clip the controller could not take in time is dropped, never replayed
+#define FOLLOWUP_MS 8000
+#define FOLLOWUP_DELAY_US 700000  // the agent's next sentence usually arrives sooner; then it plays instead
 
 static const char *TAG = "audio";
 static i2s_chan_handle_t mic, spk;
-static volatile bool talking, stop_play, talk_requested;
+static volatile bool talking, stop_play, talk_requested, playing, listening, cancel_followup;
+static volatile int64_t followup_at;  // when to open the answer window, 0 for none
+static bool mic_on;
 static volatile int hear_ms;  // debug: record this long while the speaker keeps playing
 static volatile int volume = CONFIG_ADP_SPEAKER_VOLUME;  // percent; the debug console can change it
 static portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
@@ -62,19 +74,28 @@ static void wav_header(unsigned char *h, uint32_t samples) {
 static bool button_down(void) { return gpio_get_level(CONFIG_ADP_TALK_GPIO) == 0; }
 
 // Records one utterance under the sign. Returns the number of samples kept in pcm, 0 when nobody spoke.
-static int record(int16_t *pcm) {
+// A follow-up recording gives way to the agent's next sentence until the person starts talking.
+static int record(int16_t *pcm, int nobody_ms, bool followup, const adp_vad_t *room) {
   int fixed = hear_ms;
   hear_ms = 0;
   talking = !fixed;
   stop_play = !fixed;  // the microphone must not pick up the agent (except in the debug speaker check)
+  cancel_followup = false;
   adp_sign_hold();
-  esp_err_t err = i2s_channel_enable(mic);
-  if (err) ESP_LOGW(TAG, "Microphone did not start: %s", esp_err_to_name(err));
-  int16_t frame[FRAME];
+  esp_err_t err = ESP_OK;
   size_t got;
-  for (int i = 0; i < 12; i++) i2s_channel_read(mic, frame, sizeof frame, &got, 200);  // the PDM start click lasts ~300 ms
+  if (!mic_on) {
+    if ((err = i2s_channel_enable(mic))) ESP_LOGW(TAG, "Microphone did not start: %s", esp_err_to_name(err));
+    int16_t frame[FRAME];
+    for (int i = 0; i < 12; i++) i2s_channel_read(mic, frame, sizeof frame, &got, 200);  // the PDM start click lasts ~300 ms
+  }
   adp_vad_t vad;
-  adp_vad_init(&vad);
+  if (room) {
+    vad = *room;  // the room level from listening: speech right after the phrase cannot count as the room
+    adp_vad_restart(&vad);
+  } else {
+    adp_vad_init(&vad);
+  }
   int n = 0, end = ADP_VAD_GOING;
   bool released = false;
   while (n < MAX_SAMPLES && (fixed ? n < fixed * (RATE / 1000) : end == ADP_VAD_GOING)) {
@@ -83,14 +104,15 @@ static int record(int16_t *pcm) {
       break;
     }
     adp_vad_highpass(&vad, pcm + n, FRAME);
-    end = adp_vad_frame(&vad, pcm + n, NOBODY_MS);
+    end = adp_vad_frame(&vad, pcm + n, nobody_ms);
     n += FRAME;
+    if (followup && cancel_followup && !vad.spoke) break;
     if (!button_down()) released = true;
     if (released && button_down()) break;  // a second press ends it
   }
   bool spoke = vad.spoke || fixed;
   float floor_db = vad.quiet_db;
-  i2s_channel_disable(mic);
+  if (!mic_on) i2s_channel_disable(mic);
   adp_sign_release(500);
   ESP_LOGI(TAG, "Talk: %d ms heard, speech %s, room %.1f dBFS", n * 1000 / RATE, spoke ? "yes" : "no", floor_db);
   talking = false;
@@ -104,14 +126,62 @@ static int record(int16_t *pcm) {
 }
 
 static void talk_task(void *arg) {
+  bool reset = true;
+  static adp_vad_t room;
+  adp_vad_init(&room);
+  if (listening) {
+    mic_on = i2s_channel_enable(mic) == ESP_OK;
+    adp_sign_listening(mic_on);
+    if (!mic_on) ESP_LOGE(TAG, "Microphone did not start: not listening");
+  }
   for (;;) {
-    vTaskDelay(pdMS_TO_TICKS(20));
-    if (!button_down() && !talk_requested) continue;
+    int nobody = NOBODY_MS;
+    bool go = false, followup = false;
+    if (mic_on) {
+      int16_t frame[FRAME];
+      size_t got;
+      if (i2s_channel_read(mic, frame, sizeof frame, &got, 200) || got != sizeof frame) continue;
+      if (playing) {
+        reset = true;  // it would hear the agent
+        continue;
+      }
+      if (reset) adp_wake_reset();
+      reset = false;
+      // The detector hears what a recording sends: the PDM level is about 24 dB below the clips the model
+      // was checked on, so it gets the same low cut and the recording's maximum gain
+      static adp_vad_t cut;
+      int16_t loud[FRAME];
+      memcpy(loud, frame, sizeof loud);
+      adp_vad_highpass(&cut, loud, FRAME);
+      for (int i = 0; i < FRAME; i++) loud[i] = (int16_t)(loud[i] > 2047 ? 32767 : loud[i] < -2048 ? -32768 : loud[i] * 16);
+      go = adp_wake_feed(loud, FRAME);
+#if CONFIG_ADP_DOCTOR
+      static int frames;
+      if (++frames % 100 == 0) {  // every 3 s: how close the detector came, never audio
+        int p = adp_wake_peak();
+        if (p >= 5) ESP_LOGI(TAG, "Wake: best score %d%% (cutoff %d%%)", p, CONFIG_ADP_WAKE_CUTOFF);
+      }
+#endif
+      adp_vad_highpass(&room, frame, FRAME);
+      adp_vad_frame(&room, frame, 0);
+      int64_t at = followup_at;
+      if (!go && at && esp_timer_get_time() >= at) {
+        followup_at = 0;
+        go = followup = true;
+        nobody = FOLLOWUP_MS;
+        ESP_LOGI(TAG, "Talk: waiting for an answer");
+      }
+    } else {
+      vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    if (!go && !button_down() && !talk_requested) continue;
     talk_requested = false;
+    followup_at = 0;
+    reset = true;
     unsigned char *wav = heap_caps_malloc(44 + MAX_SAMPLES * 2, MALLOC_CAP_SPIRAM);
     if (!wav) continue;
     ESP_LOGI(TAG, "Talk: recording");
-    int n = record((int16_t *)(wav + 44));
+    int n = record((int16_t *)(wav + 44), nobody, followup, mic_on ? &room : NULL);
     if (n) {
       wav_header(wav, n);
       portENTER_CRITICAL(&lock);
@@ -129,6 +199,8 @@ static void talk_task(void *arg) {
     while (button_down()) vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
+
+bool adp_board_listening(void) { return listening; }
 
 // A test press from the debug console (board_debug.c)
 void adp_board_talk_now(void) { talk_requested = true; }
@@ -173,7 +245,12 @@ static const unsigned char *chunk(const unsigned char *wav, size_t len, const ch
 int adp_board_play(const unsigned char *wav, size_t len, bool *played, void *user) {
   (void)user;
   *played = false;
-  if (talking) return 0;
+  followup_at = 0;
+  if (talking) {
+    cancel_followup = true;  // an answer window nobody has spoken in yet gives way to the agent
+    for (int i = 0; talking && i < 20; i++) vTaskDelay(pdMS_TO_TICKS(10));
+    if (talking) return 0;
+  }
   uint32_t fmt_len, data_len;
   const unsigned char *fmt = chunk(wav, len, "fmt ", &fmt_len), *data = chunk(wav, len, "data", &data_len);
   uint16_t format, channels, bits;
@@ -195,6 +272,7 @@ int adp_board_play(const unsigned char *wav, size_t len, bool *played, void *use
   if (i2s_channel_reconfig_std_clock(spk, &clk) || i2s_channel_reconfig_std_slot(spk, &slot) || i2s_channel_enable(spk))
     return -1;
   stop_play = false;
+  playing = true;
   bool stopped = false;
   ESP_LOGI(TAG, "speaker.play: %u Hz, %u ch, %.1f s", (unsigned)rate, channels, data_len / 2.0f / channels / rate);
   static int16_t out[512];  // 256 stereo frames
@@ -222,7 +300,9 @@ int adp_board_play(const unsigned char *wav, size_t len, bool *played, void *use
   size_t w;
   i2s_channel_write(spk, silence, sizeof silence, &w, 100);
   i2s_channel_disable(spk);
+  playing = false;
   *played = !stopped;
+  if (listening && !stopped) followup_at = esp_timer_get_time() + FOLLOWUP_DELAY_US;
   return 0;
 }
 
@@ -255,7 +335,11 @@ int adp_board_audio_init(bool microphone, bool speaker) {
     }
     gpio_config_t b = {.pin_bit_mask = 1ULL << CONFIG_ADP_TALK_GPIO, .mode = GPIO_MODE_INPUT, .pull_up_en = 1};
     gpio_config(&b);
-    xTaskCreate(talk_task, "talk", 4096, NULL, 5, NULL);
+#if CONFIG_ADP_LISTEN
+    listening = adp_wake_init();
+    if (!listening) ESP_LOGE(TAG, "The wake phrase model did not load: talk button only");
+#endif
+    xTaskCreate(talk_task, "talk", listening ? 8192 : 4096, NULL, 5, NULL);
   }
   return 0;
 }

@@ -71,6 +71,42 @@ menu "Agent Device Protocol"
         help
             A button to ground. GPIO0 is the BOOT button.
 
+    config ADP_LISTEN
+        bool "Listen for a wake phrase (no button needed)"
+        default n
+        depends on ADP_MICROPHONE
+        help
+            Turning it on is the owner's listen grant (docs/wiki/specs/S004). The microphone
+            runs all the time through a local detector; the LED is dim while it listens and
+            bright while it records. Nothing is kept or sent until the detector hears the
+            phrase; then the board records what the person says next, as the talk button does.
+            After the agent's speech ends, the board records up to 8 seconds more for an answer.
+
+    config ADP_WAKE_MODEL
+        string "Wake phrase model (absolute path to a microWakeWord .tflite)"
+        default ""
+        depends on ADP_LISTEN
+        help
+            Built into the firmware. Models are the owner's files and are not in this
+            repository: tools/wakeword trains one.
+
+    config ADP_WAKE_PHRASE
+        string "Wake phrase the model detects"
+        default "hey bruce"
+        depends on ADP_LISTEN
+        help
+            Lowercase letters, spaces and apostrophes. Sent to the controller as wakePhrase so
+            the agent can tell people what to say.
+
+    config ADP_WAKE_CUTOFF
+        int "Detection cutoff, percent"
+        range 1 99
+        default 59
+        depends on ADP_LISTEN
+        help
+            The mean probability of the last five 30 ms steps must be above this. The
+            training script prints the cutoff for its measured false wakes per hour.
+
     config ADP_SPEAKER
         bool "Offer speaker.play through a MAX98357A amplifier"
         default n

@@ -112,6 +112,7 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[i], "secure")) adp.secure = true;
     if (!strcmp(argv[i], "speaker")) adp.play = play;
     if (!strcmp(argv[i], "microphone")) adp.microphone = true;
+    if (!strcmp(argv[i], "listen")) adp.wake_phrase = "hey bruce";
   }
   adp_new_session(&adp);
   setvbuf(stdout, NULL, _IOLBF, 0);
