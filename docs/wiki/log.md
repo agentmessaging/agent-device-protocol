@@ -59,3 +59,7 @@ The XIAO ESP32-S3 Sense records what a person says after a BOOT press and sends 
 ## [2026-11-23] backlog | Mobile toy (Bruce)
 
 Added a "Mobile toy (Bruce)" category to the [backlog](backlog/index.md) after the first on-board tests of the wake phrase and the speaker: [B002](backlog/B002-first-words-after-wake-phrase-lost.md) (words right after the phrase are lost), [F010](backlog/F010-board-wifi-networks.md) (several networks, set up by the controller or the AI Maestro app), [F011](backlog/F011-controller-from-anywhere.md) (a public tunnel to the controller) and [F012](backlog/F012-louder-speaker-usb-board.md) (louder speech on USB power). Updated [F009](backlog/F009-wake-phrase-listening.md) with the board results and open work. Documentation only.
+
+## [2026-11-23] spec | Mobile toy: networks, public relay, wake phrase pre-roll
+
+Proposed [S005](specs/S005-device-networks.md) (Wi-Fi networks for a device that travels) and [S006](specs/S006-public-relay.md) (connecting through a public relay). Amended [S004](specs/S004-wake-phrase-listening.md): a recording may start up to 500 ms before the detection ([B002](backlog/B002-first-words-after-wake-phrase-lost.md)).
