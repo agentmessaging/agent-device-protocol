@@ -55,3 +55,7 @@ New `ADP_DOCTOR` build option for the XIAO ESP32-S3 Sense ([F008](backlog/F008-e
 ## [2026-11-22] feature | ESP32 talk button and speaker
 
 The XIAO ESP32-S3 Sense records what a person says after a BOOT press and sends it as a signed `audio` event, and plays `speaker.play` on a MAX98357A ([F008](backlog/F008-esp32-eyes-and-ears.md)). On the board, the clip's speech-to-text matched the spoken sentence, and a person understood the speaker at 12% volume. The debug build sends logs over UDP and takes `talk` and `hear` from the USB console, so these tests run without a person at the board.
+
+## [2026-11-23] backlog | Mobile toy (Bruce)
+
+Added a "Mobile toy (Bruce)" category to the [backlog](backlog/index.md) after the first on-board tests of the wake phrase and the speaker: [B002](backlog/B002-first-words-after-wake-phrase-lost.md) (words right after the phrase are lost), [F010](backlog/F010-board-wifi-networks.md) (several networks, set up by the controller or the AI Maestro app), [F011](backlog/F011-controller-from-anywhere.md) (a public tunnel to the controller) and [F012](backlog/F012-louder-speaker-usb-board.md) (louder speech on USB power). Updated [F009](backlog/F009-wake-phrase-listening.md) with the board results and open work. Documentation only.
