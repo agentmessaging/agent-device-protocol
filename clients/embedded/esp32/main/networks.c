@@ -54,9 +54,10 @@ static void load(void) {
   bool same_owner = nvs_get_str(h, "owner", was, &was_len) == ESP_OK && !strcmp(was, owner);
   if (!same_owner || nvs_get_blob(h, "list", &nets, &len) != ESP_OK || len != sizeof nets || nets.n < 0 ||
       nets.n > ADP_NETWORKS) {
-    if (!same_owner && *was) ESP_LOGW(TAG, "New controller or agent: the stored networks are erased");
+    if (!same_owner && *was) ESP_LOGW(TAG, "New controller or agent: the stored networks and the setup code are erased");
     memset(&nets, 0, sizeof nets);
     nvs_erase_key(h, "list");
+    if (!same_owner) nvs_erase_key(h, "setup");  // a new owner gets a new setup code
     nvs_set_str(h, "owner", owner);
     nvs_commit(h);
   }
@@ -145,6 +146,19 @@ static void setup_code(char code[10]) {
     nvs_commit(h);
   }
   nvs_close(h);
+}
+
+// The debug console's "setup-code": forget the code; the next setup mode makes a new one and prints it
+void adp_net_new_setup_code(void) {
+  nvs_handle_t h;
+  if (nvs_open("adp_net", NVS_READWRITE, &h)) return;
+  nvs_erase_key(h, "setup");
+  nvs_commit(h);
+  nvs_close(h);
+  char code[10] = "";
+  setup_code(code);
+  printf("\nNew setup code: %s\n", code);  // USB console only, never the log
+  memset(code, 0, sizeof code);
 }
 
 static void on_prov(void *arg, esp_event_base_t base, int32_t id, void *data) {

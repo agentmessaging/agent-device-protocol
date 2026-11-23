@@ -16,6 +16,9 @@
 void adp_board_talk_now(void);  // board_audio.c
 void adp_board_hear_now(int ms);
 void adp_board_volume(int percent);
+#if CONFIG_ADP_SETUP_MODE
+void adp_net_new_setup_code(void);  // networks.c
+#endif
 
 static int sock = -1;
 static struct sockaddr_in to;
@@ -57,8 +60,13 @@ static void commands(void *arg) {
       // Speaker volume in percent until the next restart, to find the loudest clean level by ear
       adp_board_volume(atoi(cmd + 4));
       ESP_LOGI("debug", "Console: volume %d%%", atoi(cmd + 4));
+#if CONFIG_ADP_SETUP_MODE
+    } else if (!strcmp(cmd, "setup-code")) {
+      ESP_LOGI("debug", "Console: new setup code");  // the code itself goes to the USB console only
+      adp_net_new_setup_code();
+#endif
     } else if (*cmd) {
-      ESP_LOGW("debug", "Console: unknown command '%s' (talk, hear, vol N)", cmd);
+      ESP_LOGW("debug", "Console: unknown command '%s' (talk, hear, vol N, setup-code)", cmd);
     }
   }
 }

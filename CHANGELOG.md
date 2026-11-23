@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- ESP32 client: a new owner (controller key or agent) gets a new Bluetooth setup code with the networks erased; the debug console's `setup-code` makes a new one at once, shown only on the USB console.
 - Protocol: a device plays `speaker.play` and `speaker.say` calls in the order it receives them; a call that arrives during playback waits, so a controller can send the next sentence early and speech has no gaps. The Linux kiosk now queues them (it played them over each other); the ESP32 client already handled them one at a time.
 - ESP32 client: the Bluetooth setup mode now ends cleanly: the phone reads "connected" before Bluetooth closes (a 5 s cleanup delay; it was 1 s), and Wi-Fi uses modem sleep while Bluetooth is on. Tested with esp_prov on a Mac: "Provisioning was successful".
 - ESP32 client: a Bluetooth setup mode (S005) for a board with none of its networks in range: after about 30 seconds it opens Espressif's provisioning over BLE (security 2 with a setup code the board prints on its USB console) for 10 minutes, under a slow blink, and stores the network a phone sends. On by default in the XIAO defaults. The wake phrase model now falls back to PSRAM when Bluetooth uses the internal RAM.
