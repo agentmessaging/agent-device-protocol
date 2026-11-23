@@ -194,6 +194,7 @@ int adp_board_play(const unsigned char *wav, size_t len, bool *played, void *use
     return -1;
   stop_play = false;
   bool stopped = false;
+  ESP_LOGI(TAG, "speaker.play: %u Hz, %u ch, %.1f s", (unsigned)rate, channels, data_len / 2.0f / channels / rate);
   static int16_t out[512];  // 256 stereo frames
   size_t samples = data_len / 2;
   for (size_t at = 0; at < samples && !stopped;) {

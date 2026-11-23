@@ -52,6 +52,7 @@ typedef struct {
 static QueueHandle_t frames;
 static EventGroupHandle_t wifi;
 static char *rx;
+static int64_t rx_started;  // when the first piece of the current message arrived
 static volatile uint32_t last_rx;  // 32 bits: one store, so the main task never reads half of it
 static volatile int http_status;
 static char refusal[32];
@@ -82,6 +83,11 @@ static void start_wifi(void) {
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &config));
   ESP_ERROR_CHECK(esp_wifi_start());
+#if CONFIG_ADP_SPEAKER
+  // Modem sleep holds each packet until the next beacon: 330 KB of speech took 5 s, too slow for a sentence
+  // to start right after the last one. A board with a speaker runs on mains or USB power.
+  esp_wifi_set_ps(WIFI_PS_NONE);
+#endif
 }
 
 // Created on first boot and kept in NVS. Runs after Wi-Fi starts: the radio feeds the hardware RNG.
@@ -126,12 +132,15 @@ static void on_ws(void *arg, esp_event_base_t base, int32_t id, void *event) {
       return;
     }
     if (d->payload_offset == 0) {
+      rx_started = now_ms();
       free(rx);
       rx = malloc(d->payload_len + 1);
     }
     if (!rx || d->payload_offset + d->data_len > d->payload_len) return;
     memcpy(rx + d->payload_offset, d->data_ptr, d->data_len);
     if (d->payload_offset + d->data_len < d->payload_len) return;
+    if (d->payload_len > 65536)
+      ESP_LOGI(TAG, "Received %d bytes in %d ms", d->payload_len, (int)(now_ms() - rx_started));
     frame_t f = {rx, d->payload_len, d->op_code == 0x2};
     rx = NULL;
     if (xQueueSend(frames, &f, 0) != pdTRUE) {
@@ -170,8 +179,10 @@ static bool session(adp_t *adp, const char *uri) {
       unsigned char *out = NULL;
       size_t out_len = 0;
       bool out_binary = false;
+      int64_t began = now_ms();
       int was = adp->state,
           rc = adp_receive(adp, (unsigned char *)f.data, f.len, f.binary, now_ms(), &out, &out_len, &out_binary);
+      if (f.len > 65536) ESP_LOGI(TAG, "Handled %d bytes in %d ms", (int)f.len, (int)(now_ms() - began));
       free(f.data);
       TickType_t wait = pdMS_TO_TICKS(5000 + out_len / 50);  // a snapshot is up to 1.9 MB: allow 50 KB/s
       if (out && out_binary)
