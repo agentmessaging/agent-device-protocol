@@ -25,10 +25,23 @@ int adp_board_show_text(const char *text, void *user);
 #if CONFIG_ADP_CAMERA
 int adp_board_camera_init(void);  // board_camera.c
 void adp_board_doctor(EventGroupHandle_t wifi, const char *url);  // board_doctor.c
+int adp_board_audio_init(bool microphone, bool speaker);          // board_audio.c
+int adp_board_play(const unsigned char *wav, size_t len, bool *played, void *user);
+bool adp_board_take_talk(unsigned char **wav, size_t *len);
 int adp_board_snapshot(unsigned char **jpeg, size_t *len, void *user);
 #endif
 
 static const char *TAG = "adp";
+#ifdef CONFIG_ADP_MICROPHONE
+#define MICROPHONE_ON true
+#else
+#define MICROPHONE_ON false
+#endif
+#ifdef CONFIG_ADP_SPEAKER
+#define SPEAKER_ON true
+#else
+#define SPEAKER_ON false
+#endif
 typedef struct {
   char *data;  // NULL: the connection ended
   size_t len;
@@ -39,6 +52,7 @@ typedef struct {
 static QueueHandle_t frames;
 static EventGroupHandle_t wifi;
 static char *rx;
+static int64_t rx_started;  // when the first piece of the current message arrived
 static volatile uint32_t last_rx;  // 32 bits: one store, so the main task never reads half of it
 static volatile int http_status;
 static char refusal[32];
@@ -69,6 +83,11 @@ static void start_wifi(void) {
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &config));
   ESP_ERROR_CHECK(esp_wifi_start());
+#if CONFIG_ADP_SPEAKER
+  // Modem sleep holds each packet until the next beacon: 330 KB of speech took 5 s, too slow for a sentence
+  // to start right after the last one. A board with a speaker runs on mains or USB power.
+  esp_wifi_set_ps(WIFI_PS_NONE);
+#endif
 }
 
 // Created on first boot and kept in NVS. Runs after Wi-Fi starts: the radio feeds the hardware RNG.
@@ -113,12 +132,15 @@ static void on_ws(void *arg, esp_event_base_t base, int32_t id, void *event) {
       return;
     }
     if (d->payload_offset == 0) {
+      rx_started = now_ms();
       free(rx);
       rx = malloc(d->payload_len + 1);
     }
     if (!rx || d->payload_offset + d->data_len > d->payload_len) return;
     memcpy(rx + d->payload_offset, d->data_ptr, d->data_len);
     if (d->payload_offset + d->data_len < d->payload_len) return;
+    if (d->payload_len > 65536)
+      ESP_LOGI(TAG, "Received %d bytes in %d ms", d->payload_len, (int)(now_ms() - rx_started));
     frame_t f = {rx, d->payload_len, d->op_code == 0x2};
     rx = NULL;
     if (xQueueSend(frames, &f, 0) != pdTRUE) {
@@ -137,7 +159,7 @@ static bool session(adp_t *adp, const char *uri) {
   esp_websocket_client_config_t config = {
       .uri = uri,
       .disable_auto_reconnect = true,  // reverse.md backoff and refusal rules are applied below
-      .buffer_size = 2048,
+      .buffer_size = 16384,  // also the send fragment size: a clip of 0.8 MB goes out far faster
       .network_timeout_ms = 10000,
       .task_stack = 6144,
   };
@@ -157,8 +179,10 @@ static bool session(adp_t *adp, const char *uri) {
       unsigned char *out = NULL;
       size_t out_len = 0;
       bool out_binary = false;
+      int64_t began = now_ms();
       int was = adp->state,
           rc = adp_receive(adp, (unsigned char *)f.data, f.len, f.binary, now_ms(), &out, &out_len, &out_binary);
+      if (f.len > 65536) ESP_LOGI(TAG, "Handled %d bytes in %d ms", (int)f.len, (int)(now_ms() - began));
       free(f.data);
       TickType_t wait = pdMS_TO_TICKS(5000 + out_len / 50);  // a snapshot is up to 1.9 MB: allow 50 KB/s
       if (out && out_binary)
@@ -169,6 +193,18 @@ static bool session(adp_t *adp, const char *uri) {
       if (rc) break;
       if (was < 2 && adp->state == 2) ESP_LOGI(TAG, "Connected to the controller for %s", adp->agent);
     }
+#if CONFIG_ADP_MICROPHONE
+    unsigned char *wav, *out;
+    size_t wav_len, out_len;
+    bool out_binary;
+    if (adp->microphone && adp_event_ready(adp) && adp_board_take_talk(&wav, &wav_len)) {
+      if (!adp_audio(adp, wav, wav_len, &out, &out_len, &out_binary)) {
+        esp_websocket_client_send_bin(client, (const char *)out, out_len, pdMS_TO_TICKS(5000 + out_len / 50));
+        free(out);
+      }
+      free(wav);
+    }
+#endif
     if (adp->state < 2 && now_ms() - opened > 5000) break;  // handshake bound
     uint32_t seen = last_rx;  // read before the clock, so a newer frame can't make the difference wrap
     if ((uint32_t)now_ms() - seen > 35000) break;  // controller went silent
@@ -221,7 +257,20 @@ void app_main(void) {
 #endif
   ESP_LOGI(TAG, "Device public key (safe to share): %s", adp.key);
 #if CONFIG_ADP_DOCTOR
+  extern void adp_board_debug_start(void);  // board_debug.c
   adp_board_doctor(wifi, CONFIG_ADP_CONTROLLER_URL);
+  adp_board_debug_start();
+#endif
+#if CONFIG_ADP_MICROPHONE || CONFIG_ADP_SPEAKER
+  // What a person says and what the agent plays never cross a plain home network connection
+  if (!adp.secure)
+    ESP_LOGW(TAG, "The microphone and speaker need the encrypted connection: not offered");
+  else if (!adp_board_audio_init(MICROPHONE_ON, SPEAKER_ON)) {
+    adp.microphone = MICROPHONE_ON;
+#if CONFIG_ADP_SPEAKER
+    adp.play = adp_board_play;
+#endif
+  }
 #endif
 
   static char uri[sizeof CONFIG_ADP_CONTROLLER_URL + 64];

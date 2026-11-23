@@ -51,3 +51,7 @@ Proposed [S004](specs/S004-wake-phrase-listening.md) and [F009](backlog/F009-wak
 ## [2026-11-22] feature | ESP32 hardware doctor
 
 New `ADP_DOCTOR` build option for the XIAO ESP32-S3 Sense ([F008](backlog/F008-esp32-eyes-and-ears.md)): at boot it checks chip, PSRAM, LED, Wi-Fi, the controller address, the microphone, the speaker (a tone the microphone must hear) and the camera. On the board everything passed except the speaker, whose wiring is being checked.
+
+## [2026-11-22] feature | ESP32 talk button and speaker
+
+The XIAO ESP32-S3 Sense records what a person says after a BOOT press and sends it as a signed `audio` event, and plays `speaker.play` on a MAX98357A ([F008](backlog/F008-esp32-eyes-and-ears.md)). On the board, the clip's speech-to-text matched the spoken sentence, and a person understood the speaker at 12% volume. The debug build sends logs over UDP and takes `talk` and `hear` from the USB console, so these tests run without a person at the board.

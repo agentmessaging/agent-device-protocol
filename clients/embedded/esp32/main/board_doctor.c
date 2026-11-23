@@ -23,7 +23,6 @@
 #include "freertos/task.h"
 #include "lwip/sockets.h"
 
-#define LED GPIO_NUM_21  // user LED, on at low level
 #define RATE 16000
 #define TONE_HZ 1000
 
@@ -40,7 +39,10 @@ static void report(const char *part, int ok, const char *fmt, ...) {
   printf("DOCTOR %-10s %s %s\n", part, ok > 0 ? "PASS" : ok == 0 ? "FAIL" : "INFO", detail);
 }
 
-static void led(bool on) { gpio_set_level(LED, on ? 0 : 1); }
+void adp_sign_init(void);  // board_sign.c: the user LED, shared with the camera
+void adp_sign_hold(void);
+void adp_sign_release(int linger_ms);
+static void led(bool on) { on ? adp_sign_hold() : adp_sign_release(0); }
 
 // Power of one frequency in a block (Goertzel)
 static double tone_power(const int16_t *s, int n, double hz) {
@@ -77,7 +79,7 @@ static void play_tone(void *arg) {
   for (int done = 0; done < total; done += 256) {
     for (int i = 0; i < 256; i++) buf[i] = (int16_t)(8000 * sin(2 * M_PI * TONE_HZ * (done + i) / RATE));
     size_t w;
-    i2s_channel_write(job->tx, buf, sizeof buf, &w, pdMS_TO_TICKS(1000));
+    i2s_channel_write(job->tx, buf, sizeof buf, &w, 1000);
   }
   job->ms = 0;
   vTaskDelete(NULL);
@@ -86,7 +88,7 @@ static void play_tone(void *arg) {
 static int record(i2s_chan_handle_t rx, int16_t *s, int n) {
   size_t got = 0, r;
   while (got < n * sizeof *s) {
-    if (i2s_channel_read(rx, (char *)s + got, n * sizeof *s - got, &r, pdMS_TO_TICKS(2000)) != ESP_OK) return -1;
+    if (i2s_channel_read(rx, (char *)s + got, n * sizeof *s - got, &r, 2000) != ESP_OK) return -1;
     got += r;
   }
   return 0;
@@ -117,8 +119,7 @@ static void audio(void) {
 
   int n = RATE;  // one second
   int16_t *quiet = heap_caps_malloc(n * 2, MALLOC_CAP_SPIRAM), *loud = heap_caps_malloc(n * 2, MALLOC_CAP_SPIRAM);
-  led(true);
-  vTaskDelay(pdMS_TO_TICKS(50));  // the sign is lit before the microphone records
+  led(true);  // the sign is lit before the microphone records
   bool ok = quiet && loud && !record(rx, quiet, RATE / 4) && !record(rx, quiet, n);  // the first 250 ms settle
   int peak;
   bool stuck;
@@ -142,8 +143,8 @@ static void audio(void) {
       double before = tone_power(quiet, n, TONE_HZ), during = tone_power(loud, n, TONE_HZ);
       double gain = 10 * log10((during + 1) / (before + 1));
       // The microphone hears the 1 kHz tone: the speaker, the amplifier and its wiring work
-      report("speaker", gain > 15, "1 kHz tone %.1f dB above the room at the microphone%s", gain,
-             gain > 15 ? "" : " (check VIN, GND, BCLK, LRC, DIN)");
+      report("speaker", gain > 20, "1 kHz tone %.1f dB above the room at the microphone%s", gain,
+             gain > 20 ? "" : " (check VIN, GND, BCLK, LRC, DIN)");
     }
     while (job.ms) vTaskDelay(pdMS_TO_TICKS(50));
   }
@@ -187,9 +188,7 @@ static void network(EventGroupHandle_t wifi, const char *url) {
 }
 
 void adp_board_doctor(EventGroupHandle_t wifi, const char *url) {
-  gpio_reset_pin(LED);
-  gpio_set_direction(LED, GPIO_MODE_OUTPUT);
-  led(false);
+  adp_sign_init();
   while (esp_timer_get_time() < 4000000) vTaskDelay(pdMS_TO_TICKS(100));  // the camera probe's sign ends first
   printf("DOCTOR start\n");
 

@@ -8,8 +8,12 @@
 #define ADP_HEX 49            // 24 random bytes as 48 lowercase hex characters, plus NUL
 #define ADP_KEY 44            // unpadded base64url of a 32-byte Ed25519 public key, plus NUL
 #define ADP_CHALLENGES 8      // outstanding request challenges; the spec allows up to 512
-#define ADP_MAX_FRAME 16384   // largest frame received; display.text needs about 6 KiB
+#ifndef ADP_MAX_FRAME
+#define ADP_MAX_FRAME 16384   // largest frame received; display.text needs about 6 KiB, speaker.play about 1 MiB
+#endif
 #define ADP_MAX_SNAPSHOT (1024 * 1024)  // largest JPEG sent (S003): fits the profile's 2,200,000-byte message
+#define ADP_MAX_PLAY (384 * 1024)       // speaker.play WAV (capabilities.md)
+#define ADP_MAX_AUDIO (640 * 1024)      // audio event WAV: 20 s of 16 kHz mono (reverse.md)
 
 typedef struct {
   unsigned char sk[64];  // libsodium secret key: seed then public key
@@ -25,6 +29,12 @@ typedef struct {
   // camera.snapshot, advertised only when set: the owner's camera grant and a working capture sign.
   // Shows the sign, takes one JPEG (*jpeg malloc'd, at most ADP_MAX_SNAPSHOT bytes) and returns 0.
   int (*snapshot)(unsigned char **jpeg, size_t *len, void *user);
+  // speaker.play, advertised only when set: the owner's speaker grant. Plays one WAV (RIFF/WAVE checked,
+  // at most ADP_MAX_PLAY bytes) to the end and returns 0, with *played false when it played nothing
+  // because a person is talking at the device.
+  int (*play)(const unsigned char *wav, size_t len, bool *played, void *user);
+  // The owner's microphone grant: advertised, and needed for adp_audio().
+  bool microphone;
   void *user;
   // S003: connect through /v1/secure and refuse anything that is not encrypted
   bool secure;
@@ -39,6 +49,9 @@ typedef struct {
   int sec_state;
   unsigned char sec_tx[32], sec_rx[32];  // device-to-controller and controller-to-device keys
   uint64_t sec_tx_n, sec_rx_n;            // implicit per-direction message counters
+  // device events (reverse.md): the controller's one-use challenge, and the event waiting for its ack
+  char event_challenge[ADP_HEX];
+  char event_id[ADP_HEX];
 } adp_t;
 
 // Returns 0, or -1 for a bad owner key or agent address. Needs sodium_init() first.
@@ -58,6 +71,12 @@ void adp_public_key(const unsigned char sk[64], char out[ADP_KEY]);
 // message to send, with its length and kind. Returns -1 when the connection must be closed.
 int adp_receive(adp_t *adp, const unsigned char *data, size_t len, bool binary, int64_t now_ms,
                 unsigned char **out, size_t *out_len, bool *out_binary);
+// True when an event can be sent now: authenticated, a fresh event challenge, nothing waiting for an ack.
+bool adp_event_ready(const adp_t *adp);
+// What a person said, as the signed audio event (reverse.md): a WAV of 44 to ADP_MAX_AUDIO bytes. Needs
+// the microphone grant and an encrypted connection (a plain home network connection may not carry it).
+// *out is the message to send, encrypted when secure. Returns -1 when it cannot be sent now.
+int adp_audio(adp_t *adp, const unsigned char *wav, size_t len, unsigned char **out, size_t *out_len, bool *out_binary);
 // S003 key schedule: both direction keys from the X25519 result and the decoded hello and accept bodies.
 void adp_secure_keys(const unsigned char shared[32], const unsigned char *hello, size_t hello_len,
                      const unsigned char *accept, size_t accept_len, unsigned char controller_to_device[32],

@@ -5,10 +5,11 @@ A small ESP32 board as an agent device. It opens the [outbound connection](../..
 - `device.health`: `{status:"ok", platform:"esp32s3"}` (the chip name).
 - `display.text`, only when you turn it on and your board port shows the text (see below).
 - `camera.snapshot`, on a Seeed XIAO ESP32-S3 Sense with the camera option on and the encrypted connection (see below).
+- `speaker.play`, through a MAX98357A amplifier, and a talk button that sends what a person says as an `audio` event (see below). Encrypted connection only.
 
-Nothing else is advertised: no microphone, speaker, activity events, device input or locally approved transfers.
+Nothing else is advertised: no activity events, typed input or locally approved transfers.
 
-Status: the protocol core (`main/adp.c`) is tested on a computer against the SDK (`tests/esp32-client.test.mjs`). The firmware (`main/main.c`) compiles with ESP-IDF 5.5 for esp32s3 and has run on a Seeed XIAO ESP32-S3 Sense: it joins Wi-Fi, burns the eFuse key, creates its device key in encrypted NVS and prints it. A full session with a controller has not been run on a board yet.
+Status: the protocol core (`main/adp.c`) is tested on a computer against the SDK (`tests/esp32-client.test.mjs`), and the talk button's end-of-speech logic (`main/vad.c`) on synthetic audio (`tests/esp32-vad.test.mjs`). On a Seeed XIAO ESP32-S3 Sense with a MAX98357A, against an SDK hub at a home network address: the encrypted connection, discovery, health, snapshots, talk (speech-to-text of the clip matched the spoken sentence), and speaker playback that people can understand.
 
 ## Why ESP-IDF
 
@@ -74,22 +75,45 @@ The **Offer camera.snapshot** option is the owner's local grant for the camera. 
 
 ## Doctor (XIAO ESP32-S3 Sense)
 
-Turn on **Check the hardware at boot** (`ADP_DOCTOR`) to test the parts before the board connects. It prints one line per part to the USB console (`idf.py monitor`). A real run, with the amplifier not yet working:
+Turn on **Check the hardware at boot** (`ADP_DOCTOR`) to test the parts before the board connects. It prints one line per part to the USB console (`idf.py monitor`). A real run:
 
 ```
 DOCTOR chip       PASS esp32s3 rev 0.2, 2 cores, flash 8 MB
 DOCTOR psram      PASS 8192 KB, 8189 KB free; internal RAM 232 KB free
 DOCTOR led        INFO blinked three times: a person must confirm it
-DOCTOR wifi       PASS Pelamecha, 10.0.0.107, signal -51 dBm
+DOCTOR wifi       PASS Pelamecha, 10.0.0.107, signal -47 dBm
 DOCTOR controller PASS 10.0.0.79:23112 accepts connections
-DOCTOR microphone PASS room level -44.0 dBFS, peak 368
-DOCTOR speaker    FAIL 1 kHz tone -8.3 dB above the room at the microphone (check VIN, GND, BCLK, LRC, DIN)
+DOCTOR microphone PASS room level -37.7 dBFS, peak 722
+DOCTOR speaker    PASS 1 kHz tone 48.7 dB above the room at the microphone
 DOCTOR camera     PASS 23030 byte JPEG in 771 ms
 ```
 
-The speaker check plays a 1.5 second 1 kHz tone and passes when the microphone hears it at least 15 dB above the room. The LED is on while the microphone or the camera runs. Nothing recorded leaves the board.
+The speaker check plays a 1.5 second 1 kHz tone and passes when the microphone hears it at least 20 dB above the room (electrical noise from the speaker wires alone reached 15 dB in testing). Run it three times: a result that changes between runs is a loose wire. The LED is on while the microphone or the camera runs. Nothing recorded leaves the board.
 
-Wire a MAX98357A amplifier to the XIAO: VIN to 5V, GND to GND, BCLK to D1 (GPIO2), LRC to D4 (GPIO5), DIN to D5 (GPIO6). Leave its SD and GAIN pins unconnected: the board then plays both channels mixed at 9 dB gain. Other pins are menuconfig options. These pins avoid the camera, the microphone (GPIO41/42) and the microSD slot (D8–D10).
+The doctor build is also a debug build. With **Also send logs over Wi-Fi to** (`ADP_LOG_HOST`, for example `10.0.0.79:5514`) every log line also goes out as UDP, and the USB console takes three test commands: `talk` starts a recording as the talk button does, `hear` records 6 seconds without stopping the speaker, so the board records its own playback, and `vol N` sets the speaker volume to N% until the next restart, to find the loudest clean level by ear. `talk` and `hear` run under the LED sign. All three need the USB cable.
+
+Louder speech without distortion: compress the speech before sending it rather than raising the volume. On the test board, speech compressed to peaks at -1 dBFS (about 8 dB louder on average) was clean at 12%; at 25% and above it distorted, most likely because the amplifier's supply (the XIAO's USB 5V over jumper wires) sags on loud parts. A 470 µF capacitor across the amplifier's VIN and GND and short wires are the next things to try.
+
+## Talk button and speaker (XIAO ESP32-S3 Sense)
+
+Turn on **Microphone and talk button** (`ADP_MICROPHONE`) and **Offer speaker.play** (`ADP_SPEAKER`); each is the owner's grant. Both need the encrypted connection.
+
+- **Talk:** press BOOT (the button marked B; another pin with `ADP_TALK_GPIO`) and speak. The LED is bright while the microphone runs. Recording ends one second after you stop, at a second press, or at 20 seconds, and goes to the controller as one signed `audio` event (16 kHz mono WAV). Nothing is sent if nobody speaks within 5 seconds. A clip the controller cannot take within 10 seconds is dropped, never replayed. End of speech uses a high-pass filter and the quietest recent frames as the room level, so a fan or the microphone's slow drift does not count as speech.
+- **Speaker:** `speaker.play` takes a 16-bit PCM WAV, mono or stereo, 8 to 48 kHz, up to 384 KiB, and plays it to the end. A talk press stops it with `{played:false}`. Volume is `ADP_SPEAKER_VOLUME` (12% by default).
+
+Wire a MAX98357A amplifier to the XIAO. The XIAO's pin labels are printed on the underside, which is a mirror image of the top, so check each pin by its label:
+
+| MAX98357A | XIAO |
+| --- | --- |
+| VIN | 5V |
+| GND | GND |
+| SD | 3V3: many boards stay shut down with SD unconnected |
+| GAIN | unconnected (9 dB) |
+| DIN | D5 (GPIO6) |
+| BCLK | D1 (GPIO2) |
+| LRC | D4 (GPIO5) |
+
+Pins are menuconfig options; these avoid the camera, the microphone (GPIO41/42) and the microSD slot (D8–D10). What we hit, in order: a shorted speaker made the Wi-Fi drop packets (the amplifier pulled the supply down); wires on the wrong side of the board gave silence; loose jumper wires gave noise and a speaker check that passed one run and failed the next; and at full volume speech was noise on USB power. Seat the wires firmly (or solder them), keep the volume at 12%, and a 100–470 µF capacitor across the amplifier's VIN and GND allows more.
 
 ## Showing text
 
@@ -104,11 +128,11 @@ The text is up to 4096 bytes of UTF-8 and is literal text, never markup. Without
 ## Limits
 
 - **Transport.** By default the board connects to `ws://IPV4:PORT/v1/secure/DEVICE_KEY`, the encrypted connection of [S003](../../../docs/wiki/specs/S003-encrypted-home-network-connection.md): it answers only a signed `secure.hello`, sends a signed `secure.accept` with a new X25519 key, and after that reads and sends only ChaCha20-Poly1305 binary messages. It never falls back to a plain connection; when the controller refuses `/v1/secure`, it retries later. With the option off it uses plain `/v1/connect`, which [reverse.md](../../../protocol/reverse.md#home-network-connections) limits to `device.health` and `display.text` from a home network address, and people on the same network can read the screen text. Either way the controller must listen on an address the board can reach: the reference listener binds only loopback and Tailscale, and AI Maestro needs `AIMAESTRO_DEVICE_HOME_ADDRESS`.
-- **Frame size.** Frames larger than 16 KiB are dropped. The controller then waits 15 seconds for the call to time out.
+- **Frame size.** Frames larger than 16 KiB are dropped (about 1 MiB with the speaker on). The controller then waits 15 seconds for the call to time out.
 - **Memory.** At most 8 outstanding challenges (the HTTP profile allows 512), one call at a time, and each call is answered before the next frame is read.
 - **Ownership.** Owner and agent come from the flashed config. A transfer means flashing new config. `revision` is a new random value on each boot.
-- **Partly tested on hardware.** On a XIAO ESP32-S3 Sense (OV3660): Wi-Fi, encrypted NVS, key creation, the encrypted connection to an SDK hub at a home network address, discovery, health and snapshots. Refusal handling and reconnect timing have not been run on a board.
-- **No local stop yet.** Turning the camera off means flashing with the option off.
+- **Partly tested on hardware.** On a XIAO ESP32-S3 Sense (OV3660) with a MAX98357A: Wi-Fi, encrypted NVS, key creation, the encrypted connection to an SDK hub at a home network address, discovery, health, snapshots, talk and speaker. Refusal handling and reconnect timing have not been run on a board, nor a session with AI Maestro.
+- **No local stop yet.** Turning the camera, microphone or speaker off means flashing with the option off.
 
 ## Open protocol questions
 

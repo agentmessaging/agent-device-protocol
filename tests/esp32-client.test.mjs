@@ -13,14 +13,15 @@ import WebSocket from "ws";
 import { identity, call, exchange, seal, open } from "../packages/sdk/index.mjs";
 import { ReverseHub } from "../packages/sdk/reverse.mjs";
 import { secureHello, secureFinish } from "../packages/sdk/secure.mjs";
-import { validateSchema } from "../packages/sdk/capabilities.mjs";
+import { validateSchema, builtinCapabilities } from "../packages/sdk/capabilities.mjs";
 
 const src = new URL("../clients/embedded/esp32/", import.meta.url).pathname;
 let bin, skip;
 try {
   bin = join(mkdtempSync(join(tmpdir(), "adp-esp32-")), "adp_host");
   const flags = execFileSync("pkg-config", ["--cflags", "--libs", "libsodium", "libcjson"], { encoding: "utf8" });
-  execFileSync("cc", ["-Wall", "-Werror", "-O1", "-o", bin, src + "main/adp.c", src + "host/adp_host.c", ...flags.trim().split(/\s+/)]);
+  // The firmware sets the same larger frame limit when the speaker is on (speaker.play needs about 1 MiB)
+  execFileSync("cc", ["-Wall", "-Werror", "-O1", "-DADP_MAX_FRAME=1100000", "-o", bin, src + "main/adp.c", src + "host/adp_host.c", ...flags.trim().split(/\s+/)]);
 } catch (error) {
   skip = "C toolchain, libsodium or cJSON unavailable: " + error.message.split("\n")[0];
 }
@@ -44,15 +45,15 @@ test("the C core signs byte for byte like the SDK", { skip }, () => {
   assert.deepEqual(open(packet, key), body);
 });
 
-async function connect(t, { agent = AGENT, pinned = AGENT, display = true, camera = false, secure = false, isHome } = {}) {
+async function connect(t, { agent = AGENT, pinned = AGENT, display = true, camera = false, secure = false, isHome, speaker = false, microphone = false, onAudio } = {}) {
   const owner = identity();
   const deviceKey = run(["key", SEED]);
-  const hub = new ReverseHub({ identity: owner, getDevices: () => ({ [deviceKey]: { agent: pinned } }), ...(isHome ? { isHome } : {}) });
+  const hub = new ReverseHub({ identity: owner, getDevices: () => ({ [deviceKey]: { agent: pinned } }), ...(isHome ? { isHome } : {}), ...(onAudio ? { onAudio } : {}) });
   hub.server.listen(0, "127.0.0.1");
   await once(hub.server, "listening");
   const origin = "http://127.0.0.1:" + hub.server.address().port;
-  const child = spawn(bin, ["bridge", SEED, owner.key, agent, ...(display ? ["display"] : []), ...(camera ? ["camera"] : []), ...(secure ? ["secure"] : [])]);
-  const shown = [];
+  const child = spawn(bin, ["bridge", SEED, owner.key, agent, ...(display ? ["display"] : []), ...(camera ? ["camera"] : []), ...(secure ? ["secure"] : []), ...(speaker ? ["speaker"] : []), ...(microphone ? ["microphone"] : [])]);
+  const shown = [], refused = [];
   createInterface({ input: child.stderr }).on("line", (l) => shown.push(l));
   // Stands in for the ESP32's Wi-Fi and WebSocket: one frame per line each way ("T text" or "B hex" when secure)
   const ws = new WebSocket(origin.replace("http:", "ws:") + (secure ? "/v1/secure/" : "/v1/connect/") + deviceKey);
@@ -60,7 +61,9 @@ async function connect(t, { agent = AGENT, pinned = AGENT, display = true, camer
     child.stdin.write((secure ? (isBinary ? "B " + data.toString("hex") : "T " + data.toString()) : data.toString()) + "\n"),
   );
   const forward = (l) => (!secure ? l : l.startsWith("B ") ? Buffer.from(l.slice(2), "hex") : l.slice(2));
-  createInterface({ input: child.stdout }).on("line", (l) => ws.readyState === WebSocket.OPEN && ws.send(forward(l)));
+  createInterface({ input: child.stdout }).on("line", (l) =>
+    l === "NOAUDIO" ? refused.push(l) : ws.readyState === WebSocket.OPEN && ws.send(forward(l)),
+  );
   ws.on("error", () => {});
   child.on("exit", () => ws.terminate());
   t.after(async () => {
@@ -68,7 +71,8 @@ async function connect(t, { agent = AGENT, pinned = AGENT, display = true, camer
     ws.terminate();
     await hub.close();
   });
-  return { owner, deviceKey, hub, ws, shown, endpoint: { reverse: origin }, origin };
+  const talk = (bytes) => child.stdin.write("A " + bytes + "\n");
+  return { owner, deviceKey, hub, ws, shown, refused, talk, endpoint: { reverse: origin }, origin };
 }
 
 test("the C core connects to the SDK hub and answers discovery, health and text", { skip }, async (t) => {
@@ -212,6 +216,70 @@ test("the C core offers no camera without the owner's grant", { skip }, async (t
   assert.ok(!reg.capabilities.includes("camera.snapshot"));
   const r = await exchange(s.endpoint, s.owner, s.deviceKey, { type: "invoke", capability: "camera.snapshot" }, "result");
   assert.equal(r.error, "denied");
+});
+
+const wav = (n, magic = "RIFF") => {
+  const b = Buffer.alloc(n, 7);
+  b.write(magic, 0, "latin1");
+  b.write("WAVE", 8, "latin1");
+  return b.toString("base64");
+};
+
+test("the C core plays speaker.play through /v1/secure and checks the WAV", { skip }, async (t) => {
+  const s = await connect(t, { secure: true, speaker: true, isHome: () => true });
+  await once(s.hub, "connected");
+  const reg = await call(s.endpoint, s.owner, s.deviceKey);
+  assert.ok(reg.capabilities.includes("speaker.play"));
+  assert.deepEqual(reg.capabilityDefinitions["speaker.play"], builtinCapabilities["speaker.play"]);
+  assert.equal(reg.permissions["speaker.play"], true);
+  const play = (args) => exchange(s.endpoint, s.owner, s.deviceKey, { type: "invoke", capability: "speaker.play", args }, "result");
+  assert.deepEqual((await play({ mime: "audio/wav", data: wav(300 * 1024) })).value, { played: true });
+  assert.deepEqual(s.shown, ["PLAY " + 300 * 1024]);
+  assert.equal((await play({ mime: "audio/wav", data: wav(1000, "RIFX") })).error, "invalid_arguments");
+  assert.equal((await play({ mime: "audio/wav", data: wav(384 * 1024 + 3) })).error, "invalid_arguments");
+  assert.equal((await play({ mime: "audio/mpeg", data: wav(1000) })).error, "invalid_arguments");
+  assert.equal((await play({ mime: "audio/wav", data: wav(1000), volume: 1 })).error, "invalid_arguments");
+  assert.equal((await play({ mime: "audio/wav", data: wav(1000) + "\n" })).error, "invalid_arguments");
+  assert.equal(s.shown.length, 1);
+});
+
+test("the C core sends what a person said as a signed audio event", { skip }, async (t) => {
+  const heard = [];
+  let arrived;
+  const s = await connect(t, { secure: true, microphone: true, isHome: () => true, onAudio: (key, audio) => { heard.push([key, audio]); arrived?.(); } });
+  await once(s.hub, "connected");
+  assert.equal((await call(s.endpoint, s.owner, s.deviceKey)).permissions.microphone, true);
+  const next = () => new Promise((r) => (arrived = r));
+  let wait = next();
+  s.talk(64044);
+  await wait;
+  assert.equal(heard[0][0], s.deviceKey);
+  assert.equal(heard[0][1].length, 64044);
+  assert.equal(heard[0][1].toString("latin1", 0, 4), "RIFF");
+  // After the acknowledgement the hub issues a fresh challenge, so the person can talk again
+  await new Promise((r) => setTimeout(r, 100));
+  wait = next();
+  s.talk(640 * 1024);
+  await wait;
+  assert.equal(heard[1][1].length, 640 * 1024);
+  await new Promise((r) => setTimeout(r, 100));
+  s.talk(640 * 1024 + 1);
+  await new Promise((r) => setTimeout(r, 100));
+  assert.deepEqual(s.refused, ["NOAUDIO"]);
+  assert.equal(heard.length, 2);
+});
+
+test("the C core sends no audio without the microphone grant or over a plain connection", { skip }, async (t) => {
+  const a = await connect(t, { secure: true, isHome: () => true });
+  await once(a.hub, "connected");
+  assert.equal((await call(a.endpoint, a.owner, a.deviceKey)).permissions.microphone, undefined);
+  a.talk(1000);
+  const b = await connect(t, { microphone: true });
+  await once(b.hub, "connected");
+  b.talk(1000);
+  await new Promise((r) => setTimeout(r, 200));
+  assert.deepEqual(a.refused, ["NOAUDIO"]);
+  assert.deepEqual(b.refused, ["NOAUDIO"]);
 });
 
 test("the hub refuses the C core on /v1/secure when it names another agent", { skip }, async (t) => {

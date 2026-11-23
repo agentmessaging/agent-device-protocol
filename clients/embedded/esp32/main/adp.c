@@ -166,6 +166,7 @@ void adp_new_session(adp_t *adp) {
   adp->state = 0;
   adp->sec_state = 0;
   adp->sec_tx_n = adp->sec_rx_n = 0;
+  adp->event_challenge[0] = adp->event_id[0] = 0;
   sodium_memzero(adp->sec_tx, sizeof adp->sec_tx);
   sodium_memzero(adp->sec_rx, sizeof adp->sec_rx);
 }
@@ -217,6 +218,17 @@ static cJSON *registration(adp_t *adp, cJSON *r) {
     cJSON_AddItemToObject(defs, "camera.snapshot", definition("active", NULL));
     cJSON_AddTrueToObject(perm, "camera");
   }
+  if (adp->play) {
+    // capabilities.md: mime audio/wav, standard base64 data of at most 384 KiB decoded
+    cJSON *d = cJSON_Parse("{\"activation\":\"active\",\"args\":{\"type\":\"object\",\"properties\":{"
+                           "\"mime\":{\"type\":\"string\",\"enum\":[\"audio/wav\"],\"maxLength\":16},"
+                           "\"data\":{\"type\":\"string\",\"maxLength\":524288}},"
+                           "\"required\":[\"mime\",\"data\"],\"additionalProperties\":false}}");
+    cJSON_AddItemToArray(caps, cJSON_CreateString("speaker.play"));
+    cJSON_AddItemToObject(defs, "speaker.play", d);
+    cJSON_AddTrueToObject(perm, "speaker.play");
+  }
+  if (adp->microphone) cJSON_AddTrueToObject(perm, "microphone");
   cJSON_AddItemToObject(r, "capabilities", caps);
   cJSON_AddItemToObject(r, "capabilityDefinitions", defs);
   cJSON_AddItemToObject(r, "streams", cJSON_CreateArray());
@@ -228,12 +240,49 @@ static cJSON *registration(adp_t *adp, cJSON *r) {
 // The argument checks of validateArguments() for the capabilities this client has. Omitted args mean {}.
 static bool valid_args(const char *capability, const cJSON *args) {
   bool text_cap = !strcmp(capability, "display.text");
+  if (!strcmp(capability, "speaker.play")) {
+    const cJSON *mime = field(args, "mime"), *data = field(args, "data");
+    return cJSON_IsObject(args) && cJSON_GetArraySize(args) == 2 && is(mime, "audio/wav") && cJSON_IsString(data) &&
+           strlen(data->valuestring) <= 524288;
+  }
   if (!args) return !text_cap;
   if (!cJSON_IsObject(args)) return false;
   int n = cJSON_GetArraySize(args);
   if (!text_cap) return n == 0;
   const cJSON *text = field(args, "text");
   return n == 1 && cJSON_IsString(text) && strlen(text->valuestring) <= 4096;
+}
+
+// Standard base64 WAV with the RIFF/WAVE signature, as audioBytes() in packages/sdk/capabilities.mjs checks it:
+// it must decode exactly (no whitespace or trailing bytes) to 44..max bytes.
+static unsigned char *wav_bytes(const char *b64, size_t max, size_t *len) {
+  size_t n = strlen(b64), cap = n / 4 * 3, got = 0;
+  const char *end = NULL;
+  unsigned char *wav = cap ? malloc(cap) : NULL;
+  if (!wav || sodium_base642bin(wav, cap, b64, n, NULL, &got, &end, sodium_base64_VARIANT_ORIGINAL) || end != b64 + n ||
+      got < 44 || got > max || memcmp(wav, "RIFF", 4) || memcmp(wav + 8, "WAVE", 4)) {
+    free(wav);
+    return NULL;
+  }
+  *len = got;
+  return wav;
+}
+
+static void play_result(adp_t *adp, const cJSON *args, cJSON *r) {
+  size_t len = 0;
+  unsigned char *wav = wav_bytes(field(args, "data")->valuestring, ADP_MAX_PLAY, &len);
+  bool played = false;
+  if (!wav) {
+    cJSON_AddFalseToObject(r, "ok");
+    cJSON_AddStringToObject(r, "error", "invalid_arguments");
+  } else if (adp->play(wav, len, &played, adp->user)) {
+    cJSON_AddFalseToObject(r, "ok");
+    cJSON_AddStringToObject(r, "error", "hardware_unavailable");
+  } else {
+    cJSON_AddTrueToObject(r, "ok");
+    cJSON_AddBoolToObject(cJSON_AddObjectToObject(r, "value"), "played", played);
+  }
+  free(wav);
 }
 
 // {mime:"image/jpeg",data:"<standard base64>"} as protocol/v1.md defines it, or hardware_unavailable
@@ -263,7 +312,8 @@ static cJSON *invoke(adp_t *adp, const cJSON *msg, cJSON *r) {
   const cJSON *cap = field(msg, "capability"), *args = field(msg, "args"), *k;
   bool ok = cJSON_IsString(cap) &&
             (!strcmp(cap->valuestring, "device.health") || (adp->show_text && !strcmp(cap->valuestring, "display.text")) ||
-             (adp->snapshot && !strcmp(cap->valuestring, "camera.snapshot")));
+             (adp->snapshot && !strcmp(cap->valuestring, "camera.snapshot")) ||
+             (adp->play && !strcmp(cap->valuestring, "speaker.play")));
   cJSON_ArrayForEach(k, msg) {
     bool known = false;
     for (size_t i = 0; i < sizeof allowed / sizeof *allowed; i++) known |= !strcmp(k->string, allowed[i]);
@@ -283,6 +333,8 @@ static cJSON *invoke(adp_t *adp, const cJSON *msg, cJSON *r) {
     cJSON_AddStringToObject(v, "platform", adp->platform);
   } else if (!strcmp(cap->valuestring, "camera.snapshot")) {
     snapshot_result(adp, r);
+  } else if (!strcmp(cap->valuestring, "speaker.play")) {
+    play_result(adp, args, r);
   } else if (adp->show_text(field(args, "text")->valuestring, adp->user)) {
     cJSON_AddFalseToObject(r, "ok");
     cJSON_AddStringToObject(r, "error", "hardware_unavailable");
@@ -380,12 +432,19 @@ int adp_handle(adp_t *adp, const char *frame, size_t len, int64_t now, char **ou
     }
     cJSON_Delete(a);
   } else if (field(m, "body") && field(m, "signature")) {
-    // An event.ack. This client sends no events yet, but a forged or replayed packet still ends the connection.
+    // An event.ack: only for the event waiting for one. A forged, replayed or unexpected packet ends the connection.
     cJSON *a = open_packet(m, adp->owner_pk);
-    rc = is(field(a, "type"), "event.ack") && is(field(a, "to"), adp->key) ? 0 : -1;
+    rc = *adp->event_id && is(field(a, "type"), "event.ack") && is(field(a, "to"), adp->key) &&
+                 is(field(a, "id"), adp->event_id) && cJSON_IsTrue(field(a, "accepted"))
+             ? 0
+             : -1;
+    if (!rc) adp->event_id[0] = 0;
     cJSON_Delete(a);
-  } else if (is(type, "event.challenge") || is(type, "cancel")) {
-    rc = 0;  // no events to send; calls are answered before the next frame, so nothing is left to cancel
+  } else if (is(type, "event.challenge")) {
+    rc = hex48(field(m, "challenge")) ? 0 : -1;
+    if (!rc) strcpy(adp->event_challenge, field(m, "challenge")->valuestring);
+  } else if (is(type, "cancel")) {
+    rc = 0;  // calls are answered before the next frame, so nothing is left to cancel
   } else if (is(type, "rpc") && hex48(field(m, "id"))) {
     const cJSON *method = field(m, "method");
     int status = 0;
@@ -551,4 +610,42 @@ int adp_receive(adp_t *adp, const unsigned char *data, size_t len, bool binary, 
   if (!rc && reply) rc = adp_secure_seal(adp, (const unsigned char *)reply, strlen(reply), out, out_len);
   free(reply);
   return rc;
+}
+
+// ---- device events (protocol/reverse.md, Device events and input)
+
+bool adp_event_ready(const adp_t *adp) {
+  return adp->state == 2 && (!adp->secure || adp->sec_state == 1) && *adp->event_challenge && !*adp->event_id;
+}
+
+int adp_audio(adp_t *adp, const unsigned char *wav, size_t len, unsigned char **out, size_t *out_len, bool *out_binary) {
+  *out = NULL;
+  *out_len = 0;
+  *out_binary = adp->secure;
+  // reverse.md: what a person says never crosses a plain home network connection
+  if (!adp->microphone || !adp->secure || !adp_event_ready(adp) || len < 44 || len > ADP_MAX_AUDIO ||
+      memcmp(wav, "RIFF", 4) || memcmp(wav + 8, "WAVE", 4))
+    return -1;
+  size_t b64_len = sodium_base64_ENCODED_LEN(len, sodium_base64_VARIANT_ORIGINAL);
+  char *b64 = malloc(b64_len);
+  if (!b64) return -1;
+  sodium_bin2base64(b64, b64_len, wav, len, sodium_base64_VARIANT_ORIGINAL);
+  char id[ADP_HEX];
+  nonce(id);
+  cJSON *e = cJSON_CreateObject();
+  cJSON_AddStringToObject(e, "type", "audio");
+  cJSON_AddStringToObject(e, "id", id);
+  cJSON_AddStringToObject(e, "challenge", adp->event_challenge);
+  cJSON_AddStringToObject(e, "to", adp->owner_key);
+  cJSON_AddStringToObject(e, "assignedAgent", adp->agent);
+  cJSON_AddStringToObject(e, "data", b64);
+  free(b64);
+  char *packet = print(seal_obj(adp, e));
+  if (!packet) return -1;
+  int rc = adp_secure_seal(adp, (const unsigned char *)packet, strlen(packet), out, out_len);
+  free(packet);
+  if (rc) return -1;
+  adp->event_challenge[0] = 0;  // one event per challenge
+  strcpy(adp->event_id, id);
+  return 0;
 }

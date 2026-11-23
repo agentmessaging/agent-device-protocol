@@ -54,6 +54,40 @@ menu "Agent Device Protocol"
             Turning it on is the owner's local grant for camera.snapshot. The user
             LED is the capture sign: the camera runs only while it is on.
 
+    config ADP_MICROPHONE
+        bool "Microphone and talk button (Seeed XIAO ESP32-S3 Sense)"
+        default n
+        depends on IDF_TARGET_ESP32S3 && SPIRAM
+        help
+            Turning it on is the owner's microphone grant. Press the talk button and speak:
+            the recording ends after one second of quiet and goes to the controller as an
+            audio event, over the encrypted connection only. The user LED is on while the
+            microphone runs.
+
+    config ADP_TALK_GPIO
+        int "Talk button pin"
+        default 0
+        depends on ADP_MICROPHONE
+        help
+            A button to ground. GPIO0 is the BOOT button.
+
+    config ADP_SPEAKER
+        bool "Offer speaker.play through a MAX98357A amplifier"
+        default n
+        depends on IDF_TARGET_ESP32S3 && SPIRAM
+        help
+            Turning it on is the owner's grant for speaker.play: 16-bit PCM WAV, up to 384 KiB.
+
+    config ADP_SPEAKER_VOLUME
+        int "Speaker volume, percent of full scale"
+        range 1 100
+        default 12
+        depends on ADP_SPEAKER
+        help
+            12 was the loudest clean level on a USB-powered XIAO with a MAX98357A on jumper
+            wires. With a 100-470 uF capacitor across the amplifier's VIN and GND, or its
+            own supply, it can go higher.
+
     config ADP_SPEAKER_BCLK
         int "Speaker amplifier BCLK pin"
         default 2
@@ -83,5 +117,13 @@ menu "Agent Device Protocol"
             Before connecting, print one line per part to the USB console: chip, PSRAM, LED,
             Wi-Fi, controller address, microphone, speaker (a 1 kHz tone the microphone must
             hear) and camera. The LED is on whenever the microphone or camera runs.
+            A debug build: the USB console also takes the test command "talk".
+
+    config ADP_LOG_HOST
+        string "Also send logs over Wi-Fi to (IPV4:PORT, UDP)"
+        default ""
+        depends on ADP_DOCTOR
+        help
+            For example 10.0.0.79:5514. Empty: logs stay on the USB console.
 
 endmenu
