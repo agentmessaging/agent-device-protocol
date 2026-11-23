@@ -15,13 +15,13 @@
 static portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
 static int holders;
 static int64_t until;  // microseconds
-static bool listening;
+static bool listening, setup, blink;
 static esp_timer_handle_t timer;
 
 static void apply(void) {
   int64_t now = esp_timer_get_time();
   portENTER_CRITICAL(&lock);
-  int duty = holders > 0 || now < until ? FULL : listening ? DIM : 0;
+  int duty = holders > 0 || now < until ? FULL : setup ? (blink ? FULL / 4 : 0) : listening ? DIM : 0;
   int64_t left = holders > 0 ? 0 : until - now;
   portEXIT_CRITICAL(&lock);
   // the pin is active low, so the output is inverted in the channel config
@@ -63,6 +63,23 @@ void adp_sign_release(int linger_ms) {
   if (holders > 0) holders--;
   if (end > until) until = end;
   portEXIT_CRITICAL(&lock);
+  apply();
+}
+
+// S005 setup mode: a slow blink, unlike the steady dim (listening) and steady bright (recording) signs
+static esp_timer_handle_t blinker;
+static void toggle(void *arg) {
+  blink = !blink;
+  apply();
+}
+void adp_sign_setup(bool on) {
+  if (!blinker) {
+    esp_timer_create_args_t a = {.callback = toggle, .name = "setup-sign"};
+    esp_timer_create(&a, &blinker);
+  }
+  setup = on;
+  esp_timer_stop(blinker);
+  if (on) esp_timer_start_periodic(blinker, 700 * 1000);
   apply();
 }
 

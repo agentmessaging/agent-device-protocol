@@ -15,11 +15,20 @@
 #include "nets.h"
 #include "nvs.h"
 #include "sdkconfig.h"
+#if CONFIG_ADP_SETUP_MODE
+#include "esp_random.h"
+#include "esp_srp.h"
+#include "network_provisioning/manager.h"
+#include "network_provisioning/scheme_ble.h"
+#endif
 
 #define CONNECTED BIT0  // what the rest of the firmware waits for
 #define LOST BIT1       // scan and join again
 #define FAILED BIT2     // this attempt ended
 #define RETRY_MS 10000  // with no known network in range
+#define SETUP_AFTER 3   // scans with no known network before the setup mode opens (about 30 s)
+#define SETUP_MS (10 * 60 * 1000)
+#define SETUP_DONE BIT3
 #define AGAIN_MS 2000   // a known network was there but refused us: access points refuse an association now and then
 
 static const char *TAG = "net";
@@ -116,15 +125,100 @@ static bool join(int *seen_known) {
   return joined;
 }
 
+__attribute__((weak)) void adp_sign_setup(bool on) { (void)on; }  // board_sign.c: a slow blink
+
+#if CONFIG_ADP_SETUP_MODE
+// S005 local setup mode: Espressif's provisioning over Bluetooth LE, security 2 (SRP6a) with the setup code. The
+// owner's phone sends one network; it is stored like network.add. Never opened by a controller.
+static const char SETUP_USER[] = "wifiprov";  // the username Espressif's apps and esp_prov use
+
+// Made once and kept in NVS. Printed with printf, not the log, so a debug build never sends it over Wi-Fi.
+static void setup_code(char code[10]) {
+  nvs_handle_t h;
+  size_t len = 10;
+  if (nvs_open("adp_net", NVS_READWRITE, &h)) return;
+  if (nvs_get_str(h, "setup", code, &len) != ESP_OK) {
+    static const char abc[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";  // no 0/O, 1/I
+    for (int i = 0; i < 9; i++) code[i] = i == 4 ? '-' : abc[esp_random() % 32];
+    code[9] = 0;
+    nvs_set_str(h, "setup", code);
+    nvs_commit(h);
+  }
+  nvs_close(h);
+}
+
+static void on_prov(void *arg, esp_event_base_t base, int32_t id, void *data) {
+  if (id == NETWORK_PROV_WIFI_CRED_RECV) {
+    wifi_sta_config_t *c = data;
+    xSemaphoreTake(mu, portMAX_DELAY);
+    int n = adp_nets_add(&nets, (char *)c->ssid, (char *)c->password);
+    save();
+    xSemaphoreGive(mu);
+    ESP_LOGI(TAG, "Setup: network %s received (%d stored)", (char *)c->ssid, n);
+  } else if (id == NETWORK_PROV_WIFI_CRED_FAIL) {
+    ESP_LOGW(TAG, "Setup: could not join that network; the phone can send another");
+  } else if (id == NETWORK_PROV_WIFI_CRED_SUCCESS) {
+    xEventGroupSetBits(ev, SETUP_DONE);
+  }
+}
+
+static void setup_mode(void) {
+  char code[10] = "", name[16];
+  setup_code(code);
+  if (!*code) return;
+  extern const char *adp_device_key(void);  // main.c
+  snprintf(name, sizeof name, "ADP_%.8s", adp_device_key());
+  char *salt = NULL, *verifier = NULL;
+  int verifier_len = 0;
+  if (esp_srp_gen_salt_verifier(SETUP_USER, strlen(SETUP_USER), code, strlen(code), &salt, 16, &verifier, &verifier_len)) return;
+  network_prov_security2_params_t sec = {.salt = salt, .salt_len = 16, .verifier = verifier, .verifier_len = verifier_len};
+  network_prov_mgr_config_t cfg = {.scheme = network_prov_scheme_ble, .scheme_event_handler = NETWORK_PROV_EVENT_HANDLER_NONE};
+  xEventGroupClearBits(ev, SETUP_DONE);
+  if (network_prov_mgr_init(cfg) == ESP_OK) {
+    esp_event_handler_register(NETWORK_PROV_EVENT, ESP_EVENT_ANY_ID, on_prov, NULL);
+    if (network_prov_mgr_start_provisioning(NETWORK_PROV_SECURITY_2, &sec, name, NULL) == ESP_OK) {
+      printf("\nSetup mode: Bluetooth name %s, setup code %s\n", name, code);  // USB console only
+      ESP_LOGW(TAG, "No known network: setup mode open on Bluetooth as %s for %d minutes", name, SETUP_MS / 60000);
+      adp_sign_setup(true);
+      bool done = xEventGroupWaitBits(ev, SETUP_DONE, pdTRUE, pdFALSE, pdMS_TO_TICKS(SETUP_MS)) & SETUP_DONE;
+      ESP_LOGI(TAG, "Setup mode: %s", done ? "joined the new network" : "closed after 10 minutes");
+      adp_sign_setup(false);
+      network_prov_mgr_stop_provisioning();
+      vTaskDelay(pdMS_TO_TICKS(1000));  // the manager answers the phone before it stops
+    }
+    esp_event_handler_unregister(NETWORK_PROV_EVENT, ESP_EVENT_ANY_ID, on_prov);
+    network_prov_mgr_deinit();
+  }
+  free(salt);
+  free(verifier);
+  memset(code, 0, sizeof code);
+}
+#endif
+
 static void join_task(void *arg) {
+  int empty = 0;  // scans in a row with no known network
   for (;;) {
     xEventGroupWaitBits(ev, LOST, pdTRUE, pdFALSE, portMAX_DELAY);
     current[0] = 0;
     int seen = 0;
     if (join(&seen)) {
       xEventGroupClearBits(ev, LOST);  // failed attempts before the good one set it
+      empty = 0;
       continue;
     }
+    empty = seen ? 0 : empty + 1;
+#if CONFIG_ADP_SETUP_MODE
+    if (empty >= SETUP_AFTER) {
+      empty = 0;
+      setup_mode();
+      if (xEventGroupGetBits(ev) & CONNECTED) {
+        xEventGroupClearBits(ev, LOST);
+        continue;
+      }
+      xEventGroupSetBits(ev, LOST);
+      continue;
+    }
+#endif
     if (seen)
       ESP_LOGW(TAG, "Could not join a known network; trying again in %d s", AGAIN_MS / 1000);
     else

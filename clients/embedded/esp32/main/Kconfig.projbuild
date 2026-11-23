@@ -34,6 +34,17 @@ menu "Agent Device Protocol"
             networks and joins the strongest it knows; passwords are never sent back.
             The network above is always one of them.
 
+    config ADP_SETUP_MODE
+        bool "Bluetooth setup mode when no known network is in range (S005)"
+        default n
+        depends on BT_ENABLED && BT_NIMBLE_ENABLED
+        help
+            After about 30 seconds with none of its networks in range, the board opens
+            Espressif's provisioning over Bluetooth LE (security 2) for 10 minutes, under a
+            slow blink. The owner's phone sends a network with the setup code, which the
+            board prints on its USB console. The Bluetooth name is ADP_ and the start of
+            the device key.
+
     config ADP_CONTROLLER_KEY
         string "Controller public key"
         default ""

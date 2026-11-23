@@ -57,8 +57,11 @@ extern "C" bool adp_wake_init(void) {
       ops.AddDepthwiseConv2D() || ops.AddFullyConnected() || ops.AddLogistic() || ops.AddQuantize() ||
       ops.AddReadVariable() || ops.AddReshape() || ops.AddSplitV() || ops.AddStridedSlice() || ops.AddVarHandle())
     return false;
-  uint8_t *arena = (uint8_t *)heap_caps_malloc(ARENA, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-  uint8_t *vars = (uint8_t *)heap_caps_malloc(VARIABLES, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  // Internal RAM is faster; with Bluetooth on (the setup mode) it may be short, and PSRAM is fast enough for 3 steps
+  // every 30 ms
+  uint8_t *arena = (uint8_t *)heap_caps_malloc_prefer(ARENA, 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, MALLOC_CAP_SPIRAM);
+  uint8_t *vars = (uint8_t *)heap_caps_malloc_prefer(VARIABLES, 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, MALLOC_CAP_SPIRAM);
+  if (!arena || !vars) ESP_LOGE(TAG, "No memory for the model (%u bytes)", (unsigned)ARENA);
   if (!arena || !vars) return false;
   tflite::MicroAllocator *va = tflite::MicroAllocator::Create(vars, VARIABLES);
   tflite::MicroResourceVariables *rv = tflite::MicroResourceVariables::Create(va, 20);

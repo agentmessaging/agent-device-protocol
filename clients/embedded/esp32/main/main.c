@@ -82,6 +82,10 @@ static void start_wifi(void) {
 #endif
 }
 
+static char device_public_key[ADP_KEY];
+// For the setup mode's Bluetooth name (networks.c): the public key, never the agent
+const char *adp_device_key(void) { return device_public_key; }
+
 // Created on first boot and kept in NVS. Runs after Wi-Fi starts: the radio feeds the hardware RNG.
 static void device_key(unsigned char sk[64]) {
   nvs_handle_t nvs;
@@ -243,6 +247,7 @@ void app_main(void) {
     return;
   }
   sodium_memzero(sk, sizeof sk);
+  strlcpy(device_public_key, adp.key, sizeof device_public_key);
 #if CONFIG_ADP_SECURE
   adp.secure = true;
 #else
