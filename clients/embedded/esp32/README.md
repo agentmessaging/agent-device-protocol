@@ -115,6 +115,20 @@ Wire a MAX98357A amplifier to the XIAO. The XIAO's pin labels are printed on the
 
 Pins are menuconfig options; these avoid the camera, the microphone (GPIO41/42) and the microSD slot (D8–D10). What we hit, in order: a shorted speaker made the Wi-Fi drop packets (the amplifier pulled the supply down); wires on the wrong side of the board gave silence; loose jumper wires gave noise and a speaker check that passed one run and failed the next; and at full volume speech was noise on USB power. Seat the wires firmly (or solder them), keep the volume at 12%, and a 100–470 µF capacitor across the amplifier's VIN and GND allows more.
 
+## Listening for a wake phrase (XIAO ESP32-S3 Sense)
+
+With **Listen for a wake phrase** (`ADP_LISTEN`, the owner's listen grant from [S004](../../../docs/wiki/specs/S004-wake-phrase-listening.md)) the board needs no button. The microphone runs all the time through a local detector, and the LED is dim while it listens. When it hears the phrase, the LED goes bright and the board records what the person says next, as the talk button does; nothing is sent if nobody speaks within 5 seconds. After the agent's speech ends, the board waits up to 8 seconds for an answer without the phrase. The register says `permissions.listen: true` and `wakePhrase`.
+
+- **The model** is a microWakeWord `.tflite` file that you train (`ADP_WAKE_MODEL`, an absolute path; it is built into the firmware and is not in this repository). Set `ADP_WAKE_PHRASE` to what it detects and `ADP_WAKE_CUTOFF` to the cutoff the training reported.
+- The detector keeps no audio. A 480 ms ring of microphone audio is kept in RAM, so words said right after the phrase are in the clip (the detector decides about half a second after the phrase ends).
+- The board has no echo cancellation, so detection pauses while it plays.
+- The firmware needs the 4 MB app partition of `partitions-8mb.csv` (set by `sdkconfig.defaults.xiao-s3-sense`); nvs stays where it was, so the device key survives the change.
+- The PDM microphone is about 24 dB quieter than recordings, so the detector gets the same low cut and a 16x gain as a recording.
+
+On the board (2026-11-23): "Hey Bruce" from a Mac voice was detected at 59 to 74%, a person's "Hi Bruce, are you there" at 62%, and the clip after the phrase was transcribed exactly ("Are you there?", "Can you tell me a story about the dragon?"). Scores are near the cutoff: a model trained with audio from the board's own microphone is the next step.
+
+Testing with a controller that plays back every clip makes a loop with the answer window: play nothing back, or turn listening off.
+
 ## Showing text
 
 Turn on **Offer display.text** in menuconfig and add this function to your board port (a new file in `main/`, added to `main/CMakeLists.txt`):

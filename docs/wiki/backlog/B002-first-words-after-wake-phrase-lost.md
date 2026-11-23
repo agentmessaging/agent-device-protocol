@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Type / priority / status | Bug / P2 / ready |
+| Type / priority / status | Bug / P2 / fixed on `feat/esp32-wake-phrase` |
 | Category | Mobile toy (Bruce) |
 | Owner | Unassigned |
 | GitHub | None (internal record) |
@@ -25,3 +25,5 @@ The detector decides on the mean of the last five 30 ms steps, so it fires about
 ## Evidence and status history
 
 2026-11-23: found on the board with `feat/esp32-wake-phrase`.
+
+2026-11-23: fixed. S004 amended (PR #57). The board keeps a 480 ms ring of microphone audio in RAM while listening and puts it at the start of the recording; those frames only teach the room level, so the phrase alone still sends nothing. On the board: "Hey Bruce." then "Are you there?" with no gap gave a clip transcribed as "Are you there?".
