@@ -231,6 +231,34 @@ test("talking kills what she is saying and drops what still arrives, then she ca
   assert.deepEqual(await next, { played: true });
 });
 
+test("speech plays in the order it arrives: the next sentence waits for the one playing", async () => {
+  const player = fakePlayer();
+  const voice = new Voice({ play: player.play });
+  const first = voice.play(Buffer.alloc(0));
+  const second = voice.play(Buffer.alloc(0));
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(player.started, 1);
+  player.finish();
+  assert.deepEqual(await first, { played: true });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(player.started, 2);
+  player.finish();
+  assert.deepEqual(await second, { played: true });
+});
+
+test("a person who starts talking stops the sentence playing and the ones waiting", async () => {
+  const player = fakePlayer();
+  const voice = new Voice({ play: player.play });
+  const talk = talker(voice);
+  const first = voice.play(Buffer.alloc(0));
+  const second = voice.play(Buffer.alloc(0));
+  await talk.start();
+  assert.deepEqual(await first, { played: false });
+  assert.deepEqual(await second, { played: false });
+  assert.equal(player.started, 1);
+  await talk.stop();
+});
+
 test("a cancelled talk, or one that could not start, gives her voice back", async () => {
   const voice = new Voice({ play: async () => ({ played: true }) });
   const talk = talker(voice);
