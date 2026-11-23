@@ -33,6 +33,7 @@ static const char *TAG = "audio";
 static i2s_chan_handle_t mic, spk;
 static volatile bool talking, stop_play, talk_requested;
 static volatile int hear_ms;  // debug: record this long while the speaker keeps playing
+static volatile int volume = CONFIG_ADP_SPEAKER_VOLUME;  // percent; the debug console can change it
 static portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
 static unsigned char *clip;
 static size_t clip_len;
@@ -131,6 +132,7 @@ static void talk_task(void *arg) {
 
 // A test press from the debug console (board_debug.c)
 void adp_board_talk_now(void) { talk_requested = true; }
+void adp_board_volume(int percent) { volume = percent < 1 ? 1 : percent > 100 ? 100 : percent; }
 void adp_board_hear_now(int ms) {
   hear_ms = ms;
   talk_requested = true;
@@ -208,8 +210,8 @@ int adp_board_play(const unsigned char *wav, size_t len, bool *played, void *use
       memcpy(&l, data + 2 * at++, 2);  // a WAV chunk may start at an odd offset
       r = l;
       if (channels == 2 && at < samples) memcpy(&r, data + 2 * at++, 2);
-      l = l * CONFIG_ADP_SPEAKER_VOLUME / 100;
-      r = r * CONFIG_ADP_SPEAKER_VOLUME / 100;
+      l = l * volume / 100;
+      r = r * volume / 100;
       out[k] = l;
       out[k + 1] = r;
     }

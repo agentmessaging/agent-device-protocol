@@ -90,7 +90,9 @@ DOCTOR camera     PASS 23030 byte JPEG in 771 ms
 
 The speaker check plays a 1.5 second 1 kHz tone and passes when the microphone hears it at least 20 dB above the room (electrical noise from the speaker wires alone reached 15 dB in testing). Run it three times: a result that changes between runs is a loose wire. The LED is on while the microphone or the camera runs. Nothing recorded leaves the board.
 
-The doctor build is also a debug build. With **Also send logs over Wi-Fi to** (`ADP_LOG_HOST`, for example `10.0.0.79:5514`) every log line also goes out as UDP, and the USB console takes two test commands: `talk` starts a recording as the talk button does, and `hear` records 6 seconds without stopping the speaker, so the board records its own playback. Both run under the LED sign and need the USB cable.
+The doctor build is also a debug build. With **Also send logs over Wi-Fi to** (`ADP_LOG_HOST`, for example `10.0.0.79:5514`) every log line also goes out as UDP, and the USB console takes three test commands: `talk` starts a recording as the talk button does, `hear` records 6 seconds without stopping the speaker, so the board records its own playback, and `vol N` sets the speaker volume to N% until the next restart, to find the loudest clean level by ear. `talk` and `hear` run under the LED sign. All three need the USB cable.
+
+Louder speech without distortion: compress the speech before sending it rather than raising the volume. On the test board, speech compressed to peaks at -1 dBFS (about 8 dB louder on average) was clean at 12%; at 25% and above it distorted, most likely because the amplifier's supply (the XIAO's USB 5V over jumper wires) sags on loud parts. A 470 µF capacitor across the amplifier's VIN and GND and short wires are the next things to try.
 
 ## Talk button and speaker (XIAO ESP32-S3 Sense)
 

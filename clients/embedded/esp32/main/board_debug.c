@@ -3,6 +3,7 @@
 // USB cable (physical access): "talk" starts a recording as a talk-button press does, under the sign.
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "driver/usb_serial_jtag.h"
@@ -14,6 +15,7 @@
 
 void adp_board_talk_now(void);  // board_audio.c
 void adp_board_hear_now(int ms);
+void adp_board_volume(int percent);
 
 static int sock = -1;
 static struct sockaddr_in to;
@@ -51,8 +53,12 @@ static void commands(void *arg) {
       // Records 6 s under the sign without stopping playback: the board hears its own speaker
       ESP_LOGI("debug", "Console: hear");
       adp_board_hear_now(6000);
+    } else if (!strncmp(cmd, "vol ", 4)) {
+      // Speaker volume in percent until the next restart, to find the loudest clean level by ear
+      adp_board_volume(atoi(cmd + 4));
+      ESP_LOGI("debug", "Console: volume %d%%", atoi(cmd + 4));
     } else if (*cmd) {
-      ESP_LOGW("debug", "Console: unknown command '%s' (talk, hear)", cmd);
+      ESP_LOGW("debug", "Console: unknown command '%s' (talk, hear, vol N)", cmd);
     }
   }
 }
