@@ -73,6 +73,8 @@ idf.py build flash monitor
 
 The **Offer camera.snapshot** option is the owner's local grant for the camera. The board offers `camera.snapshot` only when the option is on, the connection is encrypted, and the camera answered at boot. The user LED is the capture sign: it goes on before the camera starts, the camera runs only for the picture (the sensor is stopped between pictures), and the LED stays on three seconds after it. The answer is `{mime:"image/jpeg",data:"<standard base64>"}`, 1024×768, at most 1 MiB. A picture takes about 2.5 seconds, mostly the camera starting and letting its exposure settle.
 
+A board mounted upside down (in a toy): turn on **Camera mounted upside down** (`ADP_CAMERA_FLIP`); the sensor flips and mirrors the picture before it is encoded.
+
 ## Doctor (XIAO ESP32-S3 Sense)
 
 Turn on **Check the hardware at boot** (`ADP_DOCTOR`) to test the parts before the board connects. It prints one line per part to the USB console (`idf.py monitor`). A real run:
