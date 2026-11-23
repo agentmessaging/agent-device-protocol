@@ -1,6 +1,6 @@
 # Device-initiated connection profile
 
-This extends [v1](v1.md). An owned device opens a WebSocket directly to its controller at `ws://TAILNET_IPV4:PORT/v1/connect/DEVICE_KEY`. Loopback is also allowed for local tests, and a private network address for devices that cannot join a tailnet (see [Home network connections](#home-network-connections)). Public origins, DNS names, redirects and cloud relays are outside this profile. Tailscale supplies encryption; every authority-bearing message still uses the v1 Ed25519 domain and pinned keys.
+This extends [v1](v1.md). An owned device opens a WebSocket directly to its controller at `ws://TAILNET_IPV4:PORT/v1/connect/DEVICE_KEY`. Loopback is also allowed for local tests, and a private network address for devices that cannot join a tailnet (see [Home network connections](#home-network-connections)). Public origins, DNS names and redirects are outside this profile, except a relay the owner runs (see [Relayed connections](#relayed-connections)). Tailscale supplies encryption; every authority-bearing message still uses the v1 Ed25519 domain and pinned keys.
 
 A controller refuses a connection whose `Origin` is a web page's. It accepts no `Origin`, and its own origin: phone socket libraries always send the origin of the address they connect to, and cannot remove it.
 
@@ -31,6 +31,15 @@ Both sides compute `shared = X25519(own secret, peer public)` (an all-zero resul
 From then on every message is one WebSocket binary message: the UTF-8 JSON the plain profile would send, encrypted with ChaCha20-Poly1305 (RFC 8439) under the key for its direction, ciphertext followed by the 16-byte tag, no additional data. The nonce is four zero bytes and a 64-bit big-endian counter that starts at 0 in each direction and grows by one per message. A message that does not decrypt with the next expected counter, a text message, or a decrypted message over 2,200,000 bytes closes the connection; a replayed, dropped, reordered or changed message therefore closes it too. After 2^32 messages in one direction the sender closes, and the device reconnects with a new key exchange. Ping and pong frames carry no data and are not encrypted.
 
 The unchanged profile runs inside, starting with the controller's `hello`: every signature, pin, one-use challenge and limit still applies. A device that uses `/v1/secure` MUST NOT fall back to `/v1/connect` when the encrypted connection fails, so that no one on the network can force a downgrade. The key exchange gives confidentiality, integrity and forward secrecy against the network. It does not hide the device key in the path, the addresses, or the timing and size of messages. Test vectors are in `tests/vectors/secure-v1.json`.
+
+## Relayed connections
+
+A device that travels joins networks where its controller's home or Tailscale address does not exist ([S006](../docs/wiki/specs/S006-public-relay.md)). Its owner may publish the controller through a relay, such as a Cloudflare tunnel, at a DNS name.
+
+- The device connects to `wss://HOST[:PORT]/v1/secure/DEVICE_KEY` and checks the TLS certificate against public roots. TLS is not the trust: the encrypted connection's key exchange with the pinned controller key still comes first, and the full profile runs inside it. Through a relay a device uses `/v1/secure` only, and never falls back.
+- A device MAY keep an ordered list of addresses of the same controller, for example its home address first and the relay second, and try them in order; the backoff applies after the whole list fails.
+- The controller serves the relay on its own listener. There, `/v1/connect` is refused before the upgrade with HTTP 403 and `X-ADP-Refusal: secure_only` (a temporary refusal), and the connection's address counts for nothing: a tunnel connects from loopback, and it must not get loopback, Tailscale or home network trust.
+- The relay sees the device key in the path, the addresses, and the timing and size of messages. It cannot read or change messages without closing the connection.
 
 ## Authentication and lifecycle
 

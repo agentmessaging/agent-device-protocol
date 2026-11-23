@@ -12,8 +12,13 @@ Schemas use a bounded subset: a flat object, at most 16 properties, an explicit 
 | display.image | mime (image/jpeg or image/png), standard base64 data, decoded maximum 256 KiB | display.image | active |
 | speaker.say | text, up to 500 UTF-8 bytes | speaker.say | active |
 | speaker.play | mime (audio/wav), standard base64 data, decoded maximum 384 KiB | speaker.play | active |
+| network.add | ssid (1–32 UTF-8 bytes), password (0–63 UTF-8 bytes) | network | any |
+| network.remove | ssid (1–32 UTF-8 bytes) | network | any |
+| network.list | empty object | network | any |
 
 `speaker.say` makes speech on the device, so its voice depends on the device. `speaker.play` plays audio the controller made, so an agent can sound the same on every device; send long speech as several calls, one per sentence. It has its own grant: allowing spoken text does not allow arbitrary audio. Audio must have the RIFF/WAVE signature; URLs and file paths are refused.
+
+`network.add`, `network.remove` and `network.list` give a device that travels the Wi-Fi networks of the places it goes ([S005](../docs/wiki/specs/S005-device-networks.md)). They answer `{stored:true,count}`, `{removed,count}` and `{networks:[{ssid}],current}`. A device keeps at most 8 networks; a 9th replaces the one used least recently. A device never returns, logs or shows a password, and keeps it only in encrypted storage. They are offered only over an encrypted connection (Tailscale or `/v1/secure`), never over a plain home network connection. The `network` grant is local and off by default; the local stop turns it off and a transfer erases every network. A device with none of its networks in range may open a local Bluetooth setup mode for its owner's phone (S005); it is not part of the wire protocol.
 
 Text is literal text, never HTML or markup. Images must have the declared PNG/JPEG signature; SVG, URLs and file paths are refused. Output grants default off. The display retains output for up to sixty seconds and clears it on assignment/grant revision changes. The reference screen keeps the agent's last words on its line after that, until the person starts again or the Screen grant goes off. Speech uses the optional fixed Linux `/usr/bin/espeak-ng --stdin` adapter, with a ten-second bound; unsupported speech hardware is not advertised. Transfer resets all output and custom grants. A controller cannot install, change or remove a handler through this protocol.
 

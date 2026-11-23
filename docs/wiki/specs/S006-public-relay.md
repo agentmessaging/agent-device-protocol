@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed |
+| Status | Implemented in the SDK and on the XIAO ESP32-S3 (F011); AI Maestro pending |
 | Date | 2026-11-23 |
 | Owner | Unassigned |
 | Work | [F011](../backlog/F011-controller-from-anywhere.md); related [S003](S003-encrypted-home-network-connection.md), [S005](S005-device-networks.md) |

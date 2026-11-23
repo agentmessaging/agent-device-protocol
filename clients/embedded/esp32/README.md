@@ -129,7 +129,11 @@ On the board (2026-11-23): "Hey Bruce" from a Mac voice was detected at 59 to 74
 
 Testing with a controller that plays back every clip makes a loop with the answer window: play nothing back, or turn listening off.
 
-## Showing text
+## Wi-Fi networks and a relay (a board that travels)
+
+- **Several networks** ([S005](../../../docs/wiki/specs/S005-device-networks.md)). The board keeps up to 8 networks in NVS and joins the strongest one it knows; the network set in menuconfig is always one of them. With **Let the controller add and remove Wi-Fi networks** (`ADP_NETWORKS`, the owner's network grant) the controller can call `network.add`, `network.remove` and `network.list` over the encrypted connection. Passwords are never sent back or logged. The list is erased when the controller key or agent changes. Turn on NVS encryption (the XIAO's HMAC scheme): the passwords are stored in NVS.
+- **A relay** ([S006](../../../docs/wiki/specs/S006-public-relay.md)). **Controller address through a relay** (`ADP_RELAY_URL`, `wss://NAME`) is tried after the controller address, so the board reaches its controller from any network through, for example, a Cloudflare tunnel to the controller's relay listener. The certificate is checked against the ESP-IDF certificate bundle; the encrypted connection runs inside. The controller address may be left empty when only the relay is used.
+
 
 Turn on **Offer display.text** in menuconfig and add this function to your board port (a new file in `main/`, added to `main/CMakeLists.txt`):
 
