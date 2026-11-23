@@ -76,3 +76,20 @@ test("a slow drift of the microphone signal is not speech", { skip }, () => {
   assert.equal(r.result, "done");
   assert.ok(r.seconds < 5.5, String(r.seconds));
 });
+
+test("a very quiet room's rustle is not speech, though it rises 10 dB above the room", { skip }, () => {
+  // On the board (2026-11-23) the room sat at -80 dBFS and its noise rose to -66: at the old -70 floor that was speech,
+  // and the agent answered words nobody said, in a loop. Voices at arm's length reach -53 to -55.
+  const rustle = Array.from({ length: 40 }, (_, i) => [0.2, i % 3 ? -80 : -66, "noise"]);
+  assert.equal(run([[1, -80, "noise"], ...rustle]).result, "nobody");
+});
+
+test("a quiet voice at arm's length still counts", { skip }, () => {
+  const quiet = [];
+  for (let t = 0; t < 2; t += 0.8) quiet.push([0.6, -50, "voice"], [0.2, -80, "noise"]);
+  assert.equal(run([[1, -80, "noise"], ...quiet, [3, -80, "noise"]]).result, "done");
+});
+
+test("a click is not a person talking", { skip }, () => {
+  assert.equal(run([[1, -80, "noise"], [0.06, -30, "noise"], [6, -80, "noise"]]).result, "nobody");
+});
