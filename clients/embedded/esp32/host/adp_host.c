@@ -60,8 +60,9 @@ static int net_remove(const char *ssid, bool *removed, int *count, void *user) {
   *count = nets.n;
   return 0;
 }
-static int net_list(char names[][33], char current[33], void *user) {
+static int net_list(char names[][33], char current[33], char setup[16], void *user) {
   (void)user;
+  strcpy(setup, "TEST-CODE");
   for (int i = 0; i < nets.n; i++) strcpy(names[i], nets.e[i].ssid);
   strcpy(current, nets.n ? nets.e[0].ssid : "");
   return nets.n;

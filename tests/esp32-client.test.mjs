@@ -261,6 +261,7 @@ test("the C core stores Wi-Fi networks through /v1/secure and never answers with
   assert.ok(!list.value.networks.some((n) => n.ssid === "Net 1"));
   assert.ok(list.value.networks.some((n) => n.ssid === "Hotel"));
   assert.ok(!JSON.stringify(list).includes("secret-") && !JSON.stringify(list).includes("hotel-pass"));
+  assert.equal(list.value.setupCode, "TEST-CODE");  // S005: the owner's controller may read it, encrypted only
   assert.deepEqual((await net("network.remove", { ssid: "Hotel" })).value, { removed: true, count: 7 });
   assert.deepEqual((await net("network.remove", { ssid: "Hotel" })).value, { removed: false, count: 7 });
   assert.equal((await net("network.add", { ssid: "", password: "x" })).error, "invalid_arguments");

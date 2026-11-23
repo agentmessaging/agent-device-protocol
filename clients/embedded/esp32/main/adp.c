@@ -339,13 +339,13 @@ static void snapshot_result(adp_t *adp, cJSON *r) {
 static void network_result(adp_t *adp, const char *action, const cJSON *args, cJSON *r) {
   int count = 0, rc;
   bool removed = false;
-  char names[ADP_NETWORKS][33], current[33] = "";
+  char names[ADP_NETWORKS][33], current[33] = "", setup[16] = "";
   if (!strcmp(action, "add"))
     rc = adp->net_add(field(args, "ssid")->valuestring, field(args, "password")->valuestring, &count, adp->user);
   else if (!strcmp(action, "remove"))
     rc = adp->net_remove(field(args, "ssid")->valuestring, &removed, &count, adp->user);
   else
-    rc = count = adp->net_list(names, current, adp->user);
+    rc = count = adp->net_list(names, current, setup, adp->user);
   if (rc < 0 || count > ADP_NETWORKS) {
     cJSON_AddFalseToObject(r, "ok");
     cJSON_AddStringToObject(r, "error", "hardware_unavailable");
@@ -364,6 +364,8 @@ static void network_result(adp_t *adp, const char *action, const cJSON *args, cJ
       cJSON_AddStringToObject(v, "current", current);
     else
       cJSON_AddNullToObject(v, "current");
+    if (*setup) cJSON_AddStringToObject(v, "setupCode", setup);  // only ever over the encrypted connection
+    sodium_memzero(setup, sizeof setup);
     return;
   }
   if (*action == 'a')

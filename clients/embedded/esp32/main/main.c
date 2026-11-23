@@ -31,7 +31,7 @@ bool adp_board_listening(void);
 void adp_net_start(EventGroupHandle_t wifi);  // networks.c
 int adp_net_add(const char *ssid, const char *password, int *count, void *user);
 int adp_net_remove(const char *ssid, bool *removed, int *count, void *user);
-int adp_net_list(char names[][33], char current[33], void *user);          // board_audio.c
+int adp_net_list(char names[][33], char current[33], char setup[16], void *user);          // board_audio.c
 int adp_board_play(const unsigned char *wav, size_t len, bool *played, void *user);
 bool adp_board_take_talk(unsigned char **wav, size_t *len);
 int adp_board_snapshot(unsigned char **jpeg, size_t *len, void *user);

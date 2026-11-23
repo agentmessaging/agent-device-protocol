@@ -34,7 +34,7 @@ Compatibility: new optional capabilities. Old controllers do not call them. Old 
 | --- | --- | --- | --- | --- |
 | network.add | `ssid`: 1–32 UTF-8 bytes; `password`: 0–63 UTF-8 bytes (empty for an open network) | `{stored:true, count}` | network | any |
 | network.remove | `ssid`: 1–32 UTF-8 bytes | `{removed:boolean, count}` | network | any |
-| network.list | empty object | `{networks:[{ssid}], current:ssid or null}` | network | any |
+| network.list | empty object | `{networks:[{ssid}], current:ssid or null, setupCode?}` | network | any |
 
 - A device keeps at most 8 networks. Adding a 9th replaces the one it joined least recently. Adding a name it already has replaces that network's password.
 - A device MUST NOT return, log, display or send a password in any answer, event or log line, and MUST NOT keep it anywhere but its own encrypted storage. `network.list` returns names only.
@@ -69,6 +69,6 @@ Required evidence:
 
 Rollout: off by default. When an implementation passes, the capabilities move to [capabilities.md](../../../protocol/capabilities.md).
 
-## Open decisions
+## Decisions
 
-- Whether a controller may read the setup code (for example in `network.list`) so the owner's app can open the setup mode without the label. It makes setup easier and puts the code in one more place. Owner: unassigned.
+- 2026-11-23, owner: the controller may read the setup code. `network.list` returns it as `setupCode` when the device has a setup mode, over the encrypted connection only, so the owner's app can open the setup mode with no label on the device. The code is then in one more place (the controller); a new owner gets a new code. The Wi-Fi password is never sent back: the person types it on the phone.
