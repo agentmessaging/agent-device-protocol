@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Type / priority / status | Feature / P2 / proposed |
+| Type / priority / status | Feature / P2 / in progress |
 | Category | Mobile toy (Bruce) |
 | Owner | Unassigned |
 | GitHub | None (internal record) |
@@ -37,3 +37,5 @@ Proposal: the controller's device port is published through a Cloudflare tunnel 
 ## Evidence and status history
 
 2026-11-23: proposed. The owner chose the Cloudflare tunnel; the AI Maestro meeting room already uses one (port 23100 only).
+
+2026-11-23: S006 written and the SDK has `ReverseHub({ relay: true })` (PR #59). On the board (`feat/esp32-networks`, `ADP_RELAY_URL`), with a dead home address and a Cloudflare quick tunnel to a relay hub on the Mac: the home address failed, the board connected at once to `wss://….trycloudflare.com` with certificate checks, the S003 key exchange ran inside, and the full profile worked: discovery, a chime, 315 KB of speech in 407 ms, and a talk clip transcribed as "Hey, Bruce, can you hear me through the tunnel?". Still open: a network with no route home (a phone hotspot), and the AI Maestro relay listener (its F130).

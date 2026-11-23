@@ -199,6 +199,9 @@ static cJSON *definition(const char *activation, const char *text_key) {
   return d;
 }
 
+// Wi-Fi passwords cross only an encrypted connection (S005)
+static bool has_networks(const adp_t *adp) { return adp->secure && adp->net_add && adp->net_remove && adp->net_list; }
+
 static cJSON *registration(adp_t *adp, cJSON *r) {
   cJSON *caps = cJSON_CreateArray(), *defs = cJSON_CreateObject(), *perm = cJSON_CreateObject();
   cJSON_AddStringToObject(r, "type", "register");
@@ -228,6 +231,20 @@ static cJSON *registration(adp_t *adp, cJSON *r) {
     cJSON_AddItemToObject(defs, "speaker.play", d);
     cJSON_AddTrueToObject(perm, "speaker.play");
   }
+  if (has_networks(adp)) {  // S005: flat arguments, passwords only ever sent to the board
+    static const char *net[][2] = {
+        {"network.add", "{\"activation\":\"any\",\"args\":{\"type\":\"object\",\"properties\":{"
+                        "\"ssid\":{\"type\":\"string\",\"maxLength\":32},\"password\":{\"type\":\"string\",\"maxLength\":63}},"
+                        "\"required\":[\"ssid\",\"password\"],\"additionalProperties\":false}}"},
+        {"network.remove", "{\"activation\":\"any\",\"args\":{\"type\":\"object\",\"properties\":{"
+                           "\"ssid\":{\"type\":\"string\",\"maxLength\":32}},\"required\":[\"ssid\"],\"additionalProperties\":false}}"},
+        {"network.list", NULL}};
+    for (int i = 0; i < 3; i++) {
+      cJSON_AddItemToArray(caps, cJSON_CreateString(net[i][0]));
+      cJSON_AddItemToObject(defs, net[i][0], net[i][1] ? cJSON_Parse(net[i][1]) : definition("any", NULL));
+    }
+    cJSON_AddTrueToObject(perm, "network");
+  }
   if (adp->microphone) cJSON_AddTrueToObject(perm, "microphone");
   if (adp->microphone && adp->wake_phrase) {  // S004: tells the agent what people say; grants nothing
     cJSON_AddTrueToObject(perm, "listen");
@@ -244,6 +261,13 @@ static cJSON *registration(adp_t *adp, cJSON *r) {
 // The argument checks of validateArguments() for the capabilities this client has. Omitted args mean {}.
 static bool valid_args(const char *capability, const cJSON *args) {
   bool text_cap = !strcmp(capability, "display.text");
+  if (!strcmp(capability, "network.add") || !strcmp(capability, "network.remove")) {
+    bool add = capability[8] == 'a';
+    const cJSON *ssid = field(args, "ssid"), *pw = field(args, "password");
+    return cJSON_IsObject(args) && cJSON_GetArraySize(args) == (add ? 2 : 1) && cJSON_IsString(ssid) &&
+           *ssid->valuestring && strlen(ssid->valuestring) <= 32 &&
+           (!add || (cJSON_IsString(pw) && strlen(pw->valuestring) <= 63));
+  }
   if (!strcmp(capability, "speaker.play")) {
     const cJSON *mime = field(args, "mime"), *data = field(args, "data");
     return cJSON_IsObject(args) && cJSON_GetArraySize(args) == 2 && is(mime, "audio/wav") && cJSON_IsString(data) &&
@@ -311,13 +335,53 @@ static void snapshot_result(adp_t *adp, cJSON *r) {
   free(b64);
 }
 
+// network.add, network.remove, network.list (S005). The answer never holds a password.
+static void network_result(adp_t *adp, const char *action, const cJSON *args, cJSON *r) {
+  int count = 0, rc;
+  bool removed = false;
+  char names[ADP_NETWORKS][33], current[33] = "";
+  if (!strcmp(action, "add"))
+    rc = adp->net_add(field(args, "ssid")->valuestring, field(args, "password")->valuestring, &count, adp->user);
+  else if (!strcmp(action, "remove"))
+    rc = adp->net_remove(field(args, "ssid")->valuestring, &removed, &count, adp->user);
+  else
+    rc = count = adp->net_list(names, current, adp->user);
+  if (rc < 0 || count > ADP_NETWORKS) {
+    cJSON_AddFalseToObject(r, "ok");
+    cJSON_AddStringToObject(r, "error", "hardware_unavailable");
+    return;
+  }
+  cJSON_AddTrueToObject(r, "ok");
+  cJSON *v = cJSON_AddObjectToObject(r, "value");
+  if (!strcmp(action, "list")) {
+    cJSON *list = cJSON_AddArrayToObject(v, "networks");
+    for (int i = 0; i < count; i++) {
+      cJSON *n = cJSON_CreateObject();
+      cJSON_AddStringToObject(n, "ssid", names[i]);
+      cJSON_AddItemToArray(list, n);
+    }
+    if (*current)
+      cJSON_AddStringToObject(v, "current", current);
+    else
+      cJSON_AddNullToObject(v, "current");
+    return;
+  }
+  if (*action == 'a')
+    cJSON_AddTrueToObject(v, "stored");
+  else
+    cJSON_AddBoolToObject(v, "removed", removed);
+  cJSON_AddNumberToObject(v, "count", count);
+}
+
 static cJSON *invoke(adp_t *adp, const cJSON *msg, cJSON *r) {
   static const char *allowed[] = {"to", "id", "challenge", "type", "capability", "args"};
   const cJSON *cap = field(msg, "capability"), *args = field(msg, "args"), *k;
   bool ok = cJSON_IsString(cap) &&
             (!strcmp(cap->valuestring, "device.health") || (adp->show_text && !strcmp(cap->valuestring, "display.text")) ||
              (adp->snapshot && !strcmp(cap->valuestring, "camera.snapshot")) ||
-             (adp->play && !strcmp(cap->valuestring, "speaker.play")));
+             (adp->play && !strcmp(cap->valuestring, "speaker.play")) ||
+             (has_networks(adp) && (!strcmp(cap->valuestring, "network.add") || !strcmp(cap->valuestring, "network.remove") ||
+                                    !strcmp(cap->valuestring, "network.list"))));
   cJSON_ArrayForEach(k, msg) {
     bool known = false;
     for (size_t i = 0; i < sizeof allowed / sizeof *allowed; i++) known |= !strcmp(k->string, allowed[i]);
@@ -339,6 +403,8 @@ static cJSON *invoke(adp_t *adp, const cJSON *msg, cJSON *r) {
     snapshot_result(adp, r);
   } else if (!strcmp(cap->valuestring, "speaker.play")) {
     play_result(adp, args, r);
+  } else if (!strncmp(cap->valuestring, "network.", 8)) {
+    network_result(adp, cap->valuestring + 8, args, r);
   } else if (adp->show_text(field(args, "text")->valuestring, adp->user)) {
     cJSON_AddFalseToObject(r, "ok");
     cJSON_AddStringToObject(r, "error", "hardware_unavailable");

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Type / priority / status | Feature / P2 / proposed |
+| Type / priority / status | Feature / P2 / in progress |
 | Category | Mobile toy (Bruce) |
 | Owner | Unassigned |
 | GitHub | None (internal record) |
@@ -43,3 +43,5 @@ Not included: Wi-Fi with captive portals (hotel login pages). A phone hotspot is
 ## Evidence and status history
 
 2026-11-23: proposed after the first on-board tests of F008 and F009.
+
+2026-11-23, branch `feat/esp32-networks`: S005 written; the SDK has the definitions (PR #59); the C core offers `network.*` only on the encrypted connection (host tests: 8 networks, a 9th replaces the least recently used, no password in any answer, nothing over a plain connection). On the board: up to 8 networks in the encrypted NVS (`NVS partition "nvs" is encrypted`), the Wi-Fi driver keeps no copy, the strongest known network is joined, a refused association is retried after 2 s, the list is erased when the controller key or agent changes. Through the test controller over `/v1/secure`: `network.list` → `{"networks":[{"ssid":"Pelamecha"}],"current":"Pelamecha"}`, add, an empty name refused, remove; the test password is in no log. Still open: joining a second real network (a phone hotspot), the Bluetooth setup mode, and the AI Maestro side (its F129).

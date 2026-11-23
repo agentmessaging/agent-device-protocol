@@ -1,6 +1,6 @@
-set(srcs "main.c" "adp.c")
+set(srcs "main.c" "adp.c" "nets.c" "networks.c")
 # Kconfig values are not set while IDF scans requirements, so optional parts list theirs here
-set(requires nvs_flash esp_wifi esp_netif esp_event esp_timer esp_driver_i2s esp_driver_gpio esp_driver_ledc esp_driver_usb_serial_jtag esp_psram spi_flash lwip)
+set(requires nvs_flash esp_wifi esp_netif esp_event esp_timer esp_driver_i2s esp_driver_gpio esp_driver_ledc esp_driver_usb_serial_jtag esp_psram spi_flash lwip mbedtls)
 if(CONFIG_ADP_CAMERA OR CONFIG_ADP_MICROPHONE OR CONFIG_ADP_DOCTOR)
   list(APPEND srcs "board_sign.c")
 endif()

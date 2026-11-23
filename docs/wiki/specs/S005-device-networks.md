@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed |
+| Status | Implemented in the SDK and on the XIAO ESP32-S3 (F010), except the Bluetooth setup mode |
 | Date | 2026-11-23 |
 | Owner | Unassigned |
 | Work | [F010](../backlog/F010-board-wifi-networks.md); related [F011](../backlog/F011-controller-from-anywhere.md), [S006](S006-public-relay.md) |

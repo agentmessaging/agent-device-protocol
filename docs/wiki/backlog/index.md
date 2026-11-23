@@ -22,8 +22,8 @@ A board inside a toy that travels with its person: no screen, no button, any net
 | ID | Priority | Status | Work | Depends on | External tracking |
 | --- | --- | --- | --- | --- | --- |
 | [B002](B002-first-words-after-wake-phrase-lost.md) | P2 | Fixed | Words said right after the wake phrase are lost | S004 amendment | Internal record |
-| [F010](F010-board-wifi-networks.md) | P2 | Proposed | Join the networks of the places it travels to; networks from the controller or the AI Maestro app | A device network setup spec; F011 | Internal record |
-| [F011](F011-controller-from-anywhere.md) | P2 | Proposed | Reach the controller from anywhere through a public tunnel | S003 amendment | Internal record |
+| [F010](F010-board-wifi-networks.md) | P2 | In progress | Join the networks of the places it travels to; networks from the controller or the AI Maestro app | A device network setup spec; F011 | Internal record |
+| [F011](F011-controller-from-anywhere.md) | P2 | In progress | Reach the controller from anywhere through a public tunnel | S003 amendment | Internal record |
 | [F012](F012-louder-speaker-usb-board.md) | P3 | Proposed | Louder, clean speech on a USB-powered board | Hardware changes | Internal record |
 
 All implementation owners are currently unassigned. Start with B001; avatar packages can be designed while profiling is pending, but adding an animated renderer to the reported kiosk is gated on reliability evidence. The current task delivers documentation only. Each implementation gets its own branch and PR; split F004 into concrete per-platform items before implementation.
