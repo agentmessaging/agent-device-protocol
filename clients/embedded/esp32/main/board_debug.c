@@ -13,6 +13,7 @@
 #include "sdkconfig.h"
 
 void adp_board_talk_now(void);  // board_audio.c
+void adp_board_hear_now(int ms);
 
 static int sock = -1;
 static struct sockaddr_in to;
@@ -46,8 +47,12 @@ static void commands(void *arg) {
     if (!strcmp(cmd, "talk")) {
       ESP_LOGI("debug", "Console: talk");
       adp_board_talk_now();
+    } else if (!strcmp(cmd, "hear")) {
+      // Records 6 s under the sign without stopping playback: the board hears its own speaker
+      ESP_LOGI("debug", "Console: hear");
+      adp_board_hear_now(6000);
     } else if (*cmd) {
-      ESP_LOGW("debug", "Console: unknown command '%s' (talk)", cmd);
+      ESP_LOGW("debug", "Console: unknown command '%s' (talk, hear)", cmd);
     }
   }
 }

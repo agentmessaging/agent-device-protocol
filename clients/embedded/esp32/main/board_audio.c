@@ -17,6 +17,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
+#include "vad.h"
 
 void adp_sign_init(void);  // board_sign.c
 void adp_sign_hold(void);
@@ -25,13 +26,13 @@ void adp_sign_release(int linger_ms);
 #define RATE 16000
 #define FRAME 480  // 30 ms
 #define MAX_SAMPLES (RATE * 20 - FRAME)  // under the audio event's 20 seconds
-#define QUIET_END_MS 1000
 #define NOBODY_MS 5000
 #define STALE_MS 10000  // a clip the controller could not take in time is dropped, never replayed
 
 static const char *TAG = "audio";
 static i2s_chan_handle_t mic, spk;
 static volatile bool talking, stop_play, talk_requested;
+static volatile int hear_ms;  // debug: record this long while the speaker keeps playing
 static portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
 static unsigned char *clip;
 static size_t clip_len;
@@ -57,46 +58,37 @@ static void wav_header(unsigned char *h, uint32_t samples) {
   memcpy(h + 40, &data, 4);
 }
 
-static float frame_db(const int16_t *s, int n) {
-  double sum = 0;
-  for (int i = 0; i < n; i++) sum += (double)s[i] * s[i];
-  return 20 * log10(sqrt(sum / n) / 32768 + 1e-9);
-}
-
 static bool button_down(void) { return gpio_get_level(CONFIG_ADP_TALK_GPIO) == 0; }
 
 // Records one utterance under the sign. Returns the number of samples kept in pcm, 0 when nobody spoke.
 static int record(int16_t *pcm) {
-  talking = true;
-  stop_play = true;  // the microphone must not pick up the agent
+  int fixed = hear_ms;
+  hear_ms = 0;
+  talking = !fixed;
+  stop_play = !fixed;  // the microphone must not pick up the agent (except in the debug speaker check)
   adp_sign_hold();
   esp_err_t err = i2s_channel_enable(mic);
   if (err) ESP_LOGW(TAG, "Microphone did not start: %s", esp_err_to_name(err));
   int16_t frame[FRAME];
   size_t got;
   for (int i = 0; i < 12; i++) i2s_channel_read(mic, frame, sizeof frame, &got, 200);  // the PDM start click lasts ~300 ms
-  float floor_db = 0;
-  int n = 0, quiet_ms = 0, waited_ms = 0;
-  bool spoke = false, released = false;
-  while (n < MAX_SAMPLES) {
+  adp_vad_t vad;
+  adp_vad_init(&vad);
+  int n = 0, end = ADP_VAD_GOING;
+  bool released = false;
+  while (n < MAX_SAMPLES && (fixed ? n < fixed * (RATE / 1000) : end == ADP_VAD_GOING)) {
     if ((err = i2s_channel_read(mic, pcm + n, FRAME * 2, &got, 200)) || got != FRAME * 2) {
       ESP_LOGW(TAG, "Microphone read failed after %d ms: %s, %u bytes", n * 1000 / RATE, esp_err_to_name(err), (unsigned)got);
       break;
     }
-    float db = frame_db(pcm + n, FRAME);
-    // The quiet level starts at the first 300 ms after the button and then follows the room only between
-    // words, down faster than up: one very quiet frame must not drag it down, and speech must never raise
-    // it, or the room becomes "speech" (records all 20 s) or a long sentence becomes "quiet" (cut off).
-    bool speech = n >= 10 * FRAME && db > floor_db + 10 && db > -60;
-    if (n < 10 * FRAME) floor_db = n == 0 ? db : floor_db + (db - floor_db) / (n / FRAME + 1);
-    else if (!speech) floor_db += (db < floor_db ? 0.1f : 0.02f) * (db - floor_db);
+    adp_vad_highpass(&vad, pcm + n, FRAME);
+    end = adp_vad_frame(&vad, pcm + n, NOBODY_MS);
     n += FRAME;
     if (!button_down()) released = true;
     if (released && button_down()) break;  // a second press ends it
-    if (speech) spoke = true, quiet_ms = 0;
-    else if (spoke && (quiet_ms += 30) >= QUIET_END_MS) break;
-    if (!spoke && (waited_ms += 30) >= NOBODY_MS) break;
   }
+  bool spoke = vad.spoke || fixed;
+  float floor_db = vad.quiet_db;
   i2s_channel_disable(mic);
   adp_sign_release(500);
   ESP_LOGI(TAG, "Talk: %d ms heard, speech %s, room %.1f dBFS", n * 1000 / RATE, spoke ? "yes" : "no", floor_db);
@@ -139,6 +131,10 @@ static void talk_task(void *arg) {
 
 // A test press from the debug console (board_debug.c)
 void adp_board_talk_now(void) { talk_requested = true; }
+void adp_board_hear_now(int ms) {
+  hear_ms = ms;
+  talk_requested = true;
+}
 
 // The latest clip for the controller, once. Returns false when there is none, or it waited too long.
 bool adp_board_take_talk(unsigned char **wav, size_t *len) {
@@ -190,20 +186,34 @@ int adp_board_play(const unsigned char *wav, size_t len, bool *played, void *use
     return -1;
   }
   i2s_std_clk_config_t clk = I2S_STD_CLK_DEFAULT_CONFIG(rate);
-  i2s_std_slot_config_t slot = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
-      I2S_DATA_BIT_WIDTH_16BIT, channels == 2 ? I2S_SLOT_MODE_STEREO : I2S_SLOT_MODE_MONO);
-  slot.slot_mask = I2S_STD_SLOT_BOTH;  // the MAX98357A with SD unconnected plays (L+R)/2
+  // Stereo frames with each sample on both channels, as Meta's Muse firmware drives a MAX98357A (Waveshare
+  // S3 1.9): the amplifier's channel strap (SD) then never changes what plays. Volume: speech at full scale
+  // through the amplifier's 9 dB gain was noise on a USB-powered XIAO with jumper wires; 12% was clean.
+  i2s_std_slot_config_t slot = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
   if (i2s_channel_reconfig_std_clock(spk, &clk) || i2s_channel_reconfig_std_slot(spk, &slot) || i2s_channel_enable(spk))
     return -1;
   stop_play = false;
   bool stopped = false;
-  for (uint32_t at = 0; at < data_len; at += 2048) {
+  static int16_t out[512];  // 256 stereo frames
+  size_t samples = data_len / 2;
+  for (size_t at = 0; at < samples && !stopped;) {
     if (stop_play) {
       stopped = true;
       break;
     }
-    size_t w, n = data_len - at < 2048 ? data_len - at : 2048;
-    i2s_channel_write(spk, data + at, n, &w, 1000);
+    int k = 0;
+    for (; k < 512 && at < samples; k += 2) {
+      int16_t l, r;
+      memcpy(&l, data + 2 * at++, 2);  // a WAV chunk may start at an odd offset
+      r = l;
+      if (channels == 2 && at < samples) memcpy(&r, data + 2 * at++, 2);
+      l = l * CONFIG_ADP_SPEAKER_VOLUME / 100;
+      r = r * CONFIG_ADP_SPEAKER_VOLUME / 100;
+      out[k] = l;
+      out[k + 1] = r;
+    }
+    size_t w;
+    i2s_channel_write(spk, out, k * sizeof *out, &w, 1000);
   }
   static const int16_t silence[256];
   size_t w;

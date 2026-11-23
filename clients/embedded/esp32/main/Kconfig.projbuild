@@ -78,6 +78,16 @@ menu "Agent Device Protocol"
         help
             Turning it on is the owner's grant for speaker.play: 16-bit PCM WAV, up to 384 KiB.
 
+    config ADP_SPEAKER_VOLUME
+        int "Speaker volume, percent of full scale"
+        range 1 100
+        default 12
+        depends on ADP_SPEAKER
+        help
+            12 was the loudest clean level on a USB-powered XIAO with a MAX98357A on jumper
+            wires. With a 100-470 uF capacitor across the amplifier's VIN and GND, or its
+            own supply, it can go higher.
+
     config ADP_SPEAKER_BCLK
         int "Speaker amplifier BCLK pin"
         default 2
