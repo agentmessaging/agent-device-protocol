@@ -37,6 +37,7 @@ int adp_wake_peak(void);
 #define NOBODY_MS 5000
 #define STALE_MS 10000  // a clip the controller could not take in time is dropped, never replayed
 #define FOLLOWUP_MS 8000
+#define PREROLL 16  // frames (480 ms) kept while listening: the detector decides after the phrase ends (S004, B002)
 #define FOLLOWUP_DELAY_US 700000  // the agent's next sentence usually arrives sooner; then it plays instead
 
 static const char *TAG = "audio";
@@ -75,7 +76,7 @@ static bool button_down(void) { return gpio_get_level(CONFIG_ADP_TALK_GPIO) == 0
 
 // Records one utterance under the sign. Returns the number of samples kept in pcm, 0 when nobody spoke.
 // A follow-up recording gives way to the agent's next sentence until the person starts talking.
-static int record(int16_t *pcm, int nobody_ms, bool followup, const adp_vad_t *room) {
+static int record(int16_t *pcm, int nobody_ms, bool followup, const adp_vad_t *room, const int16_t *pre, int pre_frames) {
   int fixed = hear_ms;
   hear_ms = 0;
   talking = !fixed;
@@ -97,6 +98,14 @@ static int record(int16_t *pcm, int nobody_ms, bool followup, const adp_vad_t *r
     adp_vad_init(&vad);
   }
   int n = 0, end = ADP_VAD_GOING;
+  // Audio from just before the detection: kept in the clip, but it only teaches the room level, so the phrase
+  // alone ("hey bruce" and nothing more) is still "nobody spoke"
+  for (int i = 0; i < pre_frames; i++, n += FRAME) {
+    memcpy(pcm + n, pre + i * FRAME, FRAME * 2);
+    adp_vad_highpass(&vad, pcm + n, FRAME);
+    adp_vad_frame(&vad, pcm + n, nobody_ms);
+  }
+  if (pre_frames) adp_vad_restart(&vad);
   bool released = false;
   while (n < MAX_SAMPLES && (fixed ? n < fixed * (RATE / 1000) : end == ADP_VAD_GOING)) {
     if ((err = i2s_channel_read(mic, pcm + n, FRAME * 2, &got, 200)) || got != FRAME * 2) {
@@ -127,6 +136,8 @@ static int record(int16_t *pcm, int nobody_ms, bool followup, const adp_vad_t *r
 
 static void talk_task(void *arg) {
   bool reset = true;
+  int16_t *pre = listening ? heap_caps_malloc(PREROLL * FRAME * 2, MALLOC_CAP_SPIRAM) : NULL;
+  int pre_at = 0, pre_n = 0;  // ring of the last PREROLL listening frames, RAM only, never sent unless detected
   static adp_vad_t room;
   adp_vad_init(&room);
   if (listening) {
@@ -145,8 +156,16 @@ static void talk_task(void *arg) {
         reset = true;  // it would hear the agent
         continue;
       }
-      if (reset) adp_wake_reset();
+      if (reset) {
+        adp_wake_reset();
+        pre_n = 0;
+      }
       reset = false;
+      if (pre) {
+        memcpy(pre + pre_at * FRAME, frame, sizeof frame);
+        pre_at = (pre_at + 1) % PREROLL;
+        if (pre_n < PREROLL) pre_n++;
+      }
       // The detector hears what a recording sends: the PDM level is about 24 dB below the clips the model
       // was checked on, so it gets the same low cut and the recording's maximum gain
       static adp_vad_t cut;
@@ -181,7 +200,16 @@ static void talk_task(void *arg) {
     unsigned char *wav = heap_caps_malloc(44 + MAX_SAMPLES * 2, MALLOC_CAP_SPIRAM);
     if (!wav) continue;
     ESP_LOGI(TAG, "Talk: recording");
-    int n = record((int16_t *)(wav + 44), nobody, followup, mic_on ? &room : NULL);
+    int16_t *ordered = NULL;
+    int pre_frames = 0;
+    if (go && !followup && pre && pre_n) {  // oldest first
+      ordered = heap_caps_malloc(pre_n * FRAME * 2, MALLOC_CAP_SPIRAM);
+      for (int i = 0; ordered && i < pre_n; i++)
+        memcpy(ordered + i * FRAME, pre + ((pre_at - pre_n + i + PREROLL) % PREROLL) * FRAME, FRAME * 2);
+      if (ordered) pre_frames = pre_n;
+    }
+    int n = record((int16_t *)(wav + 44), nobody, followup, mic_on ? &room : NULL, ordered, pre_frames);
+    free(ordered);
     if (n) {
       wav_header(wav, n);
       portENTER_CRITICAL(&lock);
